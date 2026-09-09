@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Orders — CoreMatch-Logistics{% endblock %}
+{% block content %}
+
+<h1 class="text-2xl font-bold mb-6">Orders</h1>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+  <!-- Table -->
+  <div class="lg:col-span-2 bg-white rounded-xl shadow overflow-hidden">
+    <div id="orders-table">
+      {% include "partials/orders.html" %}
+    </div>
+  </div>
+
+  <!-- Add form -->
+  <div class="bg-white rounded-xl shadow p-6">
+    <h2 class="text-base font-semibold mb-4">Add Order</h2>
+    <form
+      hx-post="/orders"
+      hx-target="#orders-table"
+      hx-swap="innerHTML"
+      hx-on::after-request="this.reset()"
+      class="space-y-3">
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Order ID</label>
+        <input name="order_id" required placeholder="ORD-006"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Destination</label>
+        <input name="destination" required placeholder="Amsterdam"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      </div>
+      <p class="text-xs text-gray-500 font-medium pt-1">Driver requirements</p>
+      <div class="flex gap-4">
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" name="req_driver_adr" value="on" class="rounded" />
+          ADR
+        </label>
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" name="req_driver_ehbo" value="on" class="rounded" />
+          EHBO
+        </label>
+      </div>
+      <p class="text-xs text-gray-500 font-medium pt-1">Vehicle requirements</p>
+      <div class="flex gap-4">
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" name="req_vehicle_liftgate" value="on" class="rounded" />
+          Liftgate
+        </label>
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" name="req_vehicle_refrigerated" value="on" class="rounded" />
+          Refrigerated
+        </label>
+      </div>
+      <button type="submit"
+        class="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2 rounded-lg text-sm transition-colors">
+        Add Order
+      </button>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

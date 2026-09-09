@@ -1,0 +1,42 @@
+<table class="w-full text-sm">
+  <thead>
+    <tr class="bg-gray-100 text-left text-gray-600 uppercase text-xs">
+      <th class="px-4 py-2">Vehicle ID</th>
+      <th class="px-4 py-2">Plate</th>
+      <th class="px-4 py-2">Location</th>
+      <th class="px-4 py-2 text-center">Liftgate</th>
+      <th class="px-4 py-2 text-center">Refrigerated</th>
+      <th class="px-4 py-2 text-center">Active</th>
+      <th class="px-4 py-2"></th>
+    </tr>
+  </thead>
+  <tbody class="divide-y divide-gray-100">
+    {% for v in vehicles %}
+    <tr class="hover:bg-gray-50 {% if not v[3] %}opacity-40{% endif %}">
+      <td class="px-4 py-2 font-mono font-semibold">{{ v[0] }}</td>
+      <td class="px-4 py-2 font-mono text-xs">{{ v[1] }}</td>
+      <td class="px-4 py-2">{{ v[2] }}</td>
+      <td class="px-4 py-2 text-center">{{ '✓' if v[4] else '–' }}</td>
+      <td class="px-4 py-2 text-center">{{ '✓' if v[5] else '–' }}</td>
+      <td class="px-4 py-2 text-center">
+        <span class="px-2 py-0.5 rounded-full text-xs font-medium
+          {{ 'bg-green-100 text-green-700' if v[3] else 'bg-gray-100 text-gray-500' }}">
+          {{ 'Active' if v[3] else 'Inactive' }}
+        </span>
+      </td>
+      <td class="px-4 py-2 text-right">
+        {% if v[3] %}
+        <button
+          hx-delete="/vehicles/{{ v[0] }}"
+          hx-target="#vehicles-table"
+          hx-swap="innerHTML"
+          hx-confirm="Deactivate {{ v[0] }}?"
+          class="text-xs text-red-500 hover:text-red-700">Deactivate</button>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">No vehicles yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>

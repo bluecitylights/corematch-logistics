@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}CoreMatch-Logistics{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+  <style>
+    .htmx-indicator { opacity: 0; transition: opacity 200ms; }
+    .htmx-request .htmx-indicator { opacity: 1; }
+    .htmx-request.htmx-indicator { opacity: 1; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+
+  <!-- Nav -->
+  <nav class="bg-indigo-700 text-white shadow-md">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-6">
+      <a href="/" class="font-bold text-lg tracking-tight">🚚 CoreMatch</a>
+      <a href="/drivers"  class="hover:text-indigo-200 transition-colors">Drivers</a>
+      <a href="/vehicles" class="hover:text-indigo-200 transition-colors">Vehicles</a>
+      <a href="/orders"   class="hover:text-indigo-200 transition-colors">Orders</a>
+      <a href="http://localhost:4213" target="_blank"
+         class="ml-auto text-xs bg-indigo-500 hover:bg-indigo-400 px-3 py-1 rounded font-mono transition-colors">
+        DuckDB UI ↗
+      </a>
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+</body>
+</html>

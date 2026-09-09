@@ -1,0 +1,40 @@
+<table class="w-full text-sm">
+  <thead>
+    <tr class="bg-gray-100 text-left text-gray-600 uppercase text-xs">
+      <th class="px-4 py-2">Driver ID</th>
+      <th class="px-4 py-2">Location</th>
+      <th class="px-4 py-2 text-center">ADR</th>
+      <th class="px-4 py-2 text-center">EHBO</th>
+      <th class="px-4 py-2 text-center">Active</th>
+      <th class="px-4 py-2"></th>
+    </tr>
+  </thead>
+  <tbody class="divide-y divide-gray-100">
+    {% for d in drivers %}
+    <tr class="hover:bg-gray-50 {% if not d[2] %}opacity-40{% endif %}">
+      <td class="px-4 py-2 font-mono font-semibold">{{ d[0] }}</td>
+      <td class="px-4 py-2">{{ d[1] }}</td>
+      <td class="px-4 py-2 text-center">{{ '✓' if d[3] else '–' }}</td>
+      <td class="px-4 py-2 text-center">{{ '✓' if d[4] else '–' }}</td>
+      <td class="px-4 py-2 text-center">
+        <span class="px-2 py-0.5 rounded-full text-xs font-medium
+          {{ 'bg-green-100 text-green-700' if d[2] else 'bg-gray-100 text-gray-500' }}">
+          {{ 'Active' if d[2] else 'Inactive' }}
+        </span>
+      </td>
+      <td class="px-4 py-2 text-right">
+        {% if d[2] %}
+        <button
+          hx-delete="/drivers/{{ d[0] }}"
+          hx-target="#drivers-table"
+          hx-swap="innerHTML"
+          hx-confirm="Deactivate {{ d[0] }}?"
+          class="text-xs text-red-500 hover:text-red-700">Deactivate</button>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">No drivers yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Drivers — CoreMatch-Logistics{% endblock %}
+{% block content %}
+
+<h1 class="text-2xl font-bold mb-6">Drivers</h1>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+  <!-- Table -->
+  <div class="lg:col-span-2 bg-white rounded-xl shadow overflow-hidden">
+    <div id="drivers-table">
+      {% include "partials/drivers.html" %}
+    </div>
+  </div>
+
+  <!-- Add form -->
+  <div class="bg-white rounded-xl shadow p-6">
+    <h2 class="text-base font-semibold mb-4">Add Driver</h2>
+    <form
+      hx-post="/drivers"
+      hx-target="#drivers-table"
+      hx-swap="innerHTML"
+      hx-on::after-request="this.reset()"
+      class="space-y-3">
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Driver ID</label>
+        <input name="driver_id" required placeholder="DRV-006"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Location</label>
+        <input name="location" required placeholder="Amsterdam"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      </div>
+      <div class="flex gap-4 pt-1">
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" name="skill_adr" value="on" class="rounded" />
+          ADR
+        </label>
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" name="skill_ehbo" value="on" class="rounded" />
+          EHBO
+        </label>
+      </div>
+      <button type="submit"
+        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg text-sm transition-colors">
+        Add Driver
+      </button>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

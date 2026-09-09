@@ -1,0 +1,32 @@
+{% if results %}
+<div class="overflow-x-auto mt-2">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="bg-gray-100 text-left text-gray-600 uppercase text-xs">
+        <th class="px-4 py-2">Order</th>
+        <th class="px-4 py-2">Driver</th>
+        <th class="px-4 py-2">Vehicle</th>
+        <th class="px-4 py-2">Status</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for r in results %}
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-2 font-mono font-semibold">{{ r.order_id }}</td>
+        <td class="px-4 py-2 font-mono">{{ r.assigned_driver or '–' }}</td>
+        <td class="px-4 py-2 font-mono">{{ r.assigned_vehicle or '–' }}</td>
+        <td class="px-4 py-2">
+          {% if r.status == 'Fully Matched' %}
+          <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">✓ Matched</span>
+          {% else %}
+          <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-600">✗ Unfulfilled</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-gray-400 text-sm mt-2">No orders to match.</p>
+{% endif %}

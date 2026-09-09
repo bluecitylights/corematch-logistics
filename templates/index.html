@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — CoreMatch-Logistics{% endblock %}
+{% block content %}
+
+<h1 class="text-2xl font-bold mb-6">Dashboard</h1>
+
+<!-- Stats -->
+<div class="grid grid-cols-3 gap-4 mb-8">
+  <div class="bg-white rounded-xl shadow p-5 text-center">
+    <div class="text-4xl font-bold text-indigo-600">{{ driver_count }}</div>
+    <div class="text-sm text-gray-500 mt-1">Active Drivers</div>
+  </div>
+  <div class="bg-white rounded-xl shadow p-5 text-center">
+    <div class="text-4xl font-bold text-emerald-600">{{ vehicle_count }}</div>
+    <div class="text-sm text-gray-500 mt-1">Active Vehicles</div>
+  </div>
+  <div class="bg-white rounded-xl shadow p-5 text-center">
+    <div class="text-4xl font-bold text-amber-600">{{ order_count }}</div>
+    <div class="text-sm text-gray-500 mt-1">Orders</div>
+  </div>
+</div>
+
+<!-- Matching -->
+<div class="bg-white rounded-xl shadow p-6 mb-6">
+  <h2 class="text-lg font-semibold mb-4">Run Matching Engine</h2>
+  <div class="flex items-center gap-4">
+    <button
+      hx-post="/match"
+      hx-target="#match-results"
+      hx-swap="innerHTML"
+      hx-indicator="#match-spinner"
+      class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2 rounded-lg transition-colors">
+      ▶ Run Match
+    </button>
+    <span id="match-spinner" class="htmx-indicator text-gray-400 text-sm">Running…</span>
+  </div>
+  <div id="match-results" class="mt-4"></div>
+</div>
+
+<!-- Seed -->
+<div class="bg-white rounded-xl shadow p-6">
+  <h2 class="text-lg font-semibold mb-2">Demo Data</h2>
+  <p class="text-sm text-gray-500 mb-3">Seeds drivers, vehicles, and orders if the database is empty.</p>
+  <button
+    hx-post="/seed"
+    hx-target="#seed-result"
+    hx-swap="innerHTML"
+    class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium px-4 py-2 rounded-lg transition-colors text-sm">
+    Seed demo data
+  </button>
+  <div id="seed-result" class="mt-3"></div>
+</div>
+
+{% endblock %}

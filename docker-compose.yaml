@@ -1,0 +1,27 @@
+services:
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DB_PATH: /app/data/corematch.duckdb
+    volumes:
+      - db_data:/app/data
+    depends_on:
+      - duckdb-ui
+    restart: unless-stopped
+
+  duckdb-ui:
+    image: ghcr.io/tobilg/duckdb-ui:latest
+    ports:
+      - "4213:4213"
+    environment:
+      # Point the UI at the same database file
+      DUCKDB_FILE_PATH: /data/corematch.duckdb
+    volumes:
+      - db_data:/data
+    restart: unless-stopped
+
+volumes:
+  db_data:
