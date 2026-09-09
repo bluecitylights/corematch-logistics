@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Temporary DuckDB files created during tests and demos
+_test_*.duckdb
+_demo.duckdb
