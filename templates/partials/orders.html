@@ -1,0 +1,26 @@
+<table class="w-full text-sm">
+  <thead>
+    <tr class="bg-gray-100 text-left text-gray-600 uppercase text-xs">
+      <th class="px-4 py-2">Order ID</th>
+      <th class="px-4 py-2">Destination</th>
+      <th class="px-4 py-2 text-center">Req ADR</th>
+      <th class="px-4 py-2 text-center">Req EHBO</th>
+      <th class="px-4 py-2 text-center">Req Liftgate</th>
+      <th class="px-4 py-2 text-center">Req Refrigerated</th>
+    </tr>
+  </thead>
+  <tbody class="divide-y divide-gray-100">
+    {% for o in orders %}
+    <tr class="hover:bg-gray-50">
+      <td class="px-4 py-2 font-mono font-semibold">{{ o[0] }}</td>
+      <td class="px-4 py-2">{{ o[1] }}</td>
+      <td class="px-4 py-2 text-center">{{ '✓' if o[2] else '–' }}</td>
+      <td class="px-4 py-2 text-center">{{ '✓' if o[3] else '–' }}</td>
+      <td class="px-4 py-2 text-center">{{ '✓' if o[4] else '–' }}</td>
+      <td class="px-4 py-2 text-center">{{ '✓' if o[5] else '–' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">No orders yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
