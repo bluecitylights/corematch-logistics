@@ -59,7 +59,7 @@ async def startup():
     for attempt in range(5):
         try:
             ensure_schema()
-            return
+            break
         except Exception as e:
             if attempt == 4:
                 raise

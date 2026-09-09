@@ -27,7 +27,7 @@ corematch-logistics/
 │   ├── orders.html       # Orders list + add form
 │   └── partials/         # HTMX swap targets
 ├── Dockerfile            # Container image
-├── docker-compose.yaml   # App + DuckDB UI services
+├── docker-compose.yaml   # App service
 ├── test_engine.py        # pytest test suite (11 tests, 3 acceptance-criteria groups)
 ├── pyproject.toml        # uv project manifest
 └── uv.lock               # Pinned dependency lock
@@ -42,9 +42,36 @@ docker compose up --build
 | Service | URL | Description |
 |---|---|---|
 | Web UI | [http://localhost:8000](http://localhost:8000) | HTMX dashboard — manage drivers, vehicles, orders, run matching |
-| DuckDB UI | [http://localhost:4213](http://localhost:4213) | Live SQL browser against the same database file |
 
-The database is stored in a named Docker volume (`db_data`) so data persists across restarts. Use the **Seed demo data** button on the dashboard to populate it on first run.
+The database is stored in a named Docker volume (`db_data`) so data persists across restarts. Use the **Seed demo data** button on the dashboard to populate it on first run. Use the DuckDB CLI instructions below to inspect this volume directly.
+
+## Inspect the Podman database volume with DuckDB CLI
+
+Install the DuckDB CLI for Windows from the [official DuckDB installation page](https://duckdb.org/install/?platform=windows&environment=cli). Download and extract the Windows CLI, then verify it is available:
+
+```powershell
+duckdb --version
+```
+
+The Compose file uses the named volume `corematch-logistics_db_data`; it is stored inside the Podman VM rather than in the repository directory. To open the database from that volume, run the DuckDB CLI in a temporary container:
+
+```powershell
+podman run --rm -it -v corematch-logistics_db_data:/data docker.io/duckdb/duckdb:latest /duckdb /data/corematch.duckdb
+```
+
+Stop the app container first so the database is not locked:
+
+```powershell
+podman compose stop app
+```
+
+Inside the DuckDB prompt, inspect the schema and data:
+
+```sql
+.tables
+DESCRIBE drivers;
+SELECT * FROM drivers LIMIT 20;
+```
 
 ## Run locally (development)
 

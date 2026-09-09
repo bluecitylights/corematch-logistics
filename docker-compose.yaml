@@ -12,26 +12,11 @@ services:
       - db_data:/app/data
     restart: on-failure
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 10s
-
-  duckdb-ui:
-    build:
-      context: .
-      dockerfile: Dockerfile.duckdb-ui
-    ports:
-      - "4213:4213"
-    environment:
-      DB_PATH: /data/corematch.duckdb
-    volumes:
-      - db_data:/data
-    depends_on:
-      app:
-        condition: service_healthy
-    restart: on-failure
 
 volumes:
   db_data:
