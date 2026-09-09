@@ -12,6 +12,8 @@ COPY pyproject.toml uv.lock ./
 RUN uv pip install --system --no-cache \
     duckdb \
     "fastapi" \
+    fastmcp \
+    httpx \
     "uvicorn[standard]" \
     jinja2 \
     pandas \

@@ -16,16 +16,18 @@ Bitmap set intersection runs in microseconds, making the engine practical for th
 
 ```
 corematch-logistics/
-├── schema.sql            # DuckDB DDL: sequences, drivers, vehicles, orders, index_store
-├── engine.py             # Matching engine + demo entry-point (_seed_demo / __main__)
-├── app.py                # FastAPI web application (HTMX UI + REST endpoints)
-├── templates/            # Jinja2 HTML templates
-│   ├── base.html         # Nav + layout
-│   ├── index.html        # Dashboard (stats + match runner)
-│   ├── drivers.html      # Drivers list + add form
-│   ├── vehicles.html     # Vehicles list + add form
-│   ├── orders.html       # Orders list + add form
-│   └── partials/         # HTMX swap targets
+├── engine/               # Matching engine package
+│   ├── __init__.py       # Public engine exports
+│   └── matching.py       # Matching algorithm and demo entry-point
+├── app.py                # FastAPI application wiring and startup
+├── db/                   # DuckDB connection, helpers, and schema
+│   └── schema.sql        # DuckDB DDL: drivers, vehicles, orders, index_store
+├── api/                  # REST API routes
+├── ui/                   # HTML/HTMX routes and templates
+│   ├── routes.py         # UI route handlers
+│   └── templates/        # Jinja2 HTML templates
+├── mcp_tools/            # FastMCP server implementation
+├── mcp_server.py         # FastMCP compatibility entry point
 ├── Dockerfile            # Container image
 ├── docker-compose.yaml   # App service
 ├── test_engine.py        # pytest test suite (11 tests, 3 acceptance-criteria groups)
@@ -99,10 +101,27 @@ uv run uvicorn app:app --reload --host 127.0.0.1 --port 8000
 
 Open [http://localhost:8000](http://localhost:8000). Use the **Seed demo data** button on the dashboard to populate the database on first run.
 
+## Run the FastMCP server
+
+The FastMCP server calls the app's REST API; it does not open the DuckDB file directly. Start the web app first, then run:
+
+```bash
+uv run mcp_server.py
+```
+
+By default it connects to `http://127.0.0.1:8000`. To use another API URL:
+
+```powershell
+$env:COREMATCH_API_URL = "http://127.0.0.1:8000"
+uv run mcp_server.py
+```
+
+The MCP tools support CRUD operations for drivers, vehicles, and orders, plus running the matching engine. Deletion deactivates drivers and vehicles; orders are deleted.
+
 ## Run the demo
 
 ```bash
-uv run engine.py
+uv run -m engine.matching
 ```
 
 Seeds a small dataset (5 drivers, 4 vehicles, 5 orders across Amsterdam / Rotterdam / Utrecht) and prints the assignment results:
@@ -157,5 +176,5 @@ print(results)
 
 ## Notes
 
-- **DuckDB 1.5 compatibility** — sequences must be declared with `MINVALUE 0` when starting at 0: `CREATE SEQUENCE s START 0 MINVALUE 0`. The provided `schema.sql` already handles this.
+- **DuckDB 1.5 compatibility** — sequences must be declared with `MINVALUE 0` when starting at 0: `CREATE SEQUENCE s START 0 MINVALUE 0`. The provided `db/schema.sql` already handles this.
 - Indexes (`index_store` table) are available for persisting serialized bitmaps between runs; the current engine rebuilds them from the relational tables on each invocation.
