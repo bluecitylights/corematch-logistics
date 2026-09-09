@@ -4,7 +4,7 @@ CoreMatch-Logistics: high-performance dual-resource allocation engine.
 Uses DuckDB for relational state persistence and pyroaring BitMaps for
 sub-millisecond set intersections during driver + vehicle matching.
 
-Run:  uv run engine.py
+Run:  uv run -m engine.matching
 """
 
 import duckdb
@@ -15,7 +15,7 @@ from pathlib import Path
 
 def init_schema(con: duckdb.DuckDBPyConnection) -> None:
     """Apply schema.sql to an existing connection."""
-    schema_path = Path(__file__).parent / "schema.sql"
+    schema_path = Path(__file__).parent.parent / "db" / "schema.sql"
     con.execute(schema_path.read_text())
 
 
@@ -216,7 +216,7 @@ def _seed_demo(con: duckdb.DuckDBPyConnection) -> None:
 if __name__ == "__main__":
     import os
 
-    tmp_db = str(Path(__file__).parent / "_demo.duckdb")
+    tmp_db = str(Path(__file__).parent.parent / "_demo.duckdb")
     try:
         con = duckdb.connect(tmp_db)
         init_schema(con)
