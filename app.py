@@ -41,7 +41,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 def get_db() -> duckdb.DuckDBPyConnection:
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-    return duckdb.connect(DB_PATH)
+    return duckdb.connect(DB_PATH, read_only=False)
 
 
 def ensure_schema():
@@ -57,7 +57,17 @@ def ensure_schema():
 
 @app.on_event("startup")
 async def startup():
-    ensure_schema()
+    import time
+    # Retry a few times in case the volume mount is still settling
+    for attempt in range(5):
+        try:
+            ensure_schema()
+            return
+        except Exception as e:
+            if attempt == 4:
+                raise
+            print(f"[app] DB not ready ({e}), retrying in 2s…", flush=True)
+            time.sleep(2)
 
 
 # ---------------------------------------------------------------------------

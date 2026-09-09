@@ -1,7 +1,9 @@
 """
 Launches the DuckDB built-in UI server.
-start_ui_server() blocks but may return; we restart it automatically.
-A separate connection handles control (stop).
+
+Opens the database READ-ONLY so it can coexist with the app's read-write
+connection on the same file. DuckDB 1.1+ supports multiple read-only
+connections alongside a single read-write connection.
 """
 import os
 import signal
@@ -16,13 +18,20 @@ PORT = int(os.environ.get("UI_PORT", "4213"))
 
 os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
 
-print(f"[duckdb-ui] Opening {DB_PATH} on port {PORT}", flush=True)
+# Wait for the app to create the DB file before connecting
+for _ in range(30):
+    if os.path.exists(DB_PATH):
+        break
+    print(f"[duckdb-ui] Waiting for {DB_PATH}…", flush=True)
+    time.sleep(2)
+
+print(f"[duckdb-ui] Opening {DB_PATH} (read-only) on port {PORT}", flush=True)
 
 _shutdown_requested = threading.Event()
 
 
 def _make_con():
-    con = duckdb.connect(DB_PATH)
+    con = duckdb.connect(DB_PATH, read_only=True)
     con.execute(f"SET ui_local_port={PORT}")
     con.execute("INSTALL ui; LOAD ui")
     return con
@@ -36,16 +45,15 @@ def _serve():
             con.close()
         except Exception as e:
             msg = str(e).lower()
-            if "stop" in msg or "shutdown" in msg:
+            if _shutdown_requested.is_set() or "stop" in msg or "shutdown" in msg:
                 break
-            print(f"[duckdb-ui] Server exited ({e}), restarting in 2s…", flush=True)
-            time.sleep(2)
+            print(f"[duckdb-ui] Server exited ({e}), restarting in 3s…", flush=True)
+            time.sleep(3)
 
 
 server_thread = threading.Thread(target=_serve, daemon=True)
 server_thread.start()
 
-# Wait for server to bind
 time.sleep(2)
 print(f"[duckdb-ui] UI ready at http://0.0.0.0:{PORT}", flush=True)
 
@@ -54,8 +62,8 @@ def _shutdown(sig, frame):
     print("[duckdb-ui] Stopping…", flush=True)
     _shutdown_requested.set()
     try:
-        ctrl = _make_con()
-        ctrl.execute("CALL stop_ui_server()")
+        ctrl = duckdb.connect(DB_PATH, read_only=True)
+        ctrl.execute("LOAD ui; CALL stop_ui_server()")
         ctrl.close()
     except Exception:
         pass
