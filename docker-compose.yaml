@@ -1,14 +1,16 @@
 services:
 
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     environment:
       DB_PATH: /app/data/corematch.duckdb
     volumes:
       - db_data:/app/data
-    restart: unless-stopped
+    restart: on-failure
 
   duckdb-ui:
     build:
@@ -16,9 +18,11 @@ services:
       dockerfile: Dockerfile.duckdb-ui
     ports:
       - "4213:4213"
+    environment:
+      DB_PATH: /data/corematch.duckdb
     volumes:
       - db_data:/data
-    restart: unless-stopped
+    restart: on-failure
 
 volumes:
   db_data:
