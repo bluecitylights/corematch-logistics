@@ -1,0 +1,15 @@
+FROM python:3.13-slim
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/
+
+WORKDIR /app
+
+# Install only duckdb (brings the CLI + UI assets)
+RUN uv pip install --system duckdb
+
+# Small launch script: start the DuckDB UI on 0.0.0.0:4213
+COPY duckdb_ui_server.py ./
+
+EXPOSE 4213
+
+CMD ["python", "duckdb_ui_server.py"]
