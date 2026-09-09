@@ -15,12 +15,12 @@ Routes:
 """
 
 import os
+import time
 from pathlib import Path
 
 import duckdb
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from engine import init_schema, run_corematch_logistics
@@ -46,7 +46,6 @@ def get_db() -> duckdb.DuckDBPyConnection:
 
 def ensure_schema():
     con = get_db()
-    # Check if tables already exist
     tables = {r[0] for r in con.execute(
         "SELECT table_name FROM information_schema.tables WHERE table_schema='main'"
     ).fetchall()}
@@ -57,8 +56,6 @@ def ensure_schema():
 
 @app.on_event("startup")
 async def startup():
-    import time
-    # Retry a few times in case the volume mount is still settling
     for attempt in range(5):
         try:
             ensure_schema()
@@ -82,6 +79,11 @@ def _is_htmx(request: Request) -> bool:
     return request.headers.get("HX-Request") == "true"
 
 
+def _tmpl(request: Request, name: str, ctx: dict):
+    """Render a template with the new Starlette 1.6+ API."""
+    return templates.TemplateResponse(request, name, ctx)
+
+
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
@@ -93,8 +95,7 @@ async def index(request: Request):
     vehicle_count = con.execute("SELECT COUNT(*) FROM vehicles WHERE is_active").fetchone()[0]
     order_count   = con.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
     con.close()
-    return templates.TemplateResponse("index.html", {
-        "request": request,
+    return _tmpl(request, "index.html", {
         "driver_count": driver_count,
         "vehicle_count": vehicle_count,
         "order_count": order_count,
@@ -112,10 +113,8 @@ async def drivers_page(request: Request):
         "SELECT driver_id, location, is_active, skill_adr, skill_ehbo FROM drivers ORDER BY driver_index"
     ).fetchall()
     con.close()
-    ctx = {"request": request, "drivers": rows}
-    if _is_htmx(request):
-        return templates.TemplateResponse("partials/drivers.html", ctx)
-    return templates.TemplateResponse("drivers.html", ctx)
+    template = "partials/drivers.html" if _is_htmx(request) else "drivers.html"
+    return _tmpl(request, template, {"drivers": rows})
 
 
 @app.post("/drivers", response_class=HTMLResponse)
@@ -155,10 +154,8 @@ async def vehicles_page(request: Request):
         "FROM vehicles ORDER BY vehicle_index"
     ).fetchall()
     con.close()
-    ctx = {"request": request, "vehicles": rows}
-    if _is_htmx(request):
-        return templates.TemplateResponse("partials/vehicles.html", ctx)
-    return templates.TemplateResponse("vehicles.html", ctx)
+    template = "partials/vehicles.html" if _is_htmx(request) else "vehicles.html"
+    return _tmpl(request, template, {"vehicles": rows})
 
 
 @app.post("/vehicles", response_class=HTMLResponse)
@@ -200,10 +197,8 @@ async def orders_page(request: Request):
         "req_vehicle_liftgate, req_vehicle_refrigerated FROM orders ORDER BY order_id"
     ).fetchall()
     con.close()
-    ctx = {"request": request, "orders": rows}
-    if _is_htmx(request):
-        return templates.TemplateResponse("partials/orders.html", ctx)
-    return templates.TemplateResponse("orders.html", ctx)
+    template = "partials/orders.html" if _is_htmx(request) else "orders.html"
+    return _tmpl(request, template, {"orders": rows})
 
 
 @app.post("/orders", response_class=HTMLResponse)
@@ -236,10 +231,7 @@ async def add_order(
 async def run_match(request: Request):
     results_df = run_corematch_logistics(DB_PATH)
     results = results_df.to_dict(orient="records")
-    return templates.TemplateResponse("partials/match_results.html", {
-        "request": request,
-        "results": results,
-    })
+    return _tmpl(request, "partials/match_results.html", {"results": results})
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +242,6 @@ async def run_match(request: Request):
 async def seed_demo(request: Request):
     from engine import _seed_demo
     con = get_db()
-    # Only seed if empty
     if con.execute("SELECT COUNT(*) FROM drivers").fetchone()[0] == 0:
         _seed_demo(con)
     con.close()
