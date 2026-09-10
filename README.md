@@ -28,6 +28,7 @@ corematch-logistics/
 │   └── templates/        # Jinja2 HTML templates
 ├── mcp_tools/            # FastMCP server implementation
 ├── mcp_server.py         # FastMCP compatibility entry point
+├── librechat.yaml        # LibreChat MCP server configuration
 ├── Dockerfile            # Container image
 ├── docker-compose.yaml   # App service
 ├── test_engine.py        # pytest test suite (11 tests, 3 acceptance-criteria groups)
@@ -41,9 +42,31 @@ corematch-logistics/
 docker compose up --build
 ```
 
+LibreChat starts with the CoreMatch MCP server configured through
+`librechat.yaml`. You still need to configure an LLM provider/API key for
+LibreChat before sending messages. The MCP server calls the app internally at
+`http://app:8000`; it does not access DuckDB directly.
+
+LibreChat also requires application secrets. Create a `.env` file in the
+repository root before starting the stack:
+
+```powershell
+@"
+JWT_SECRET=$(-join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) }))
+JWT_REFRESH_SECRET=$(-join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) }))
+CREDS_KEY=$(-join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) }))
+CREDS_IV=$(-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) }))
+"@ | Set-Content .env
+```
+
+Alternatively, set these four environment variables in your shell. Do not
+commit `.env` or reuse these development values in production.
+
 | Service | URL | Description |
 |---|---|---|
 | Web UI | [http://localhost:8000](http://localhost:8000) | HTMX dashboard — manage drivers, vehicles, orders, run matching |
+| LibreChat | [http://localhost:3080](http://localhost:3080) | Chat UI with the CoreMatch MCP tools configured |
+| MCP HTTP | [http://localhost:8001/mcp](http://localhost:8001/mcp) | Streamable HTTP MCP endpoint for LibreChat |
 
 The database is stored in a named Docker volume (`db_data`) so data persists across restarts. Use the **Seed demo data** button on the dashboard to populate it on first run. Use the DuckDB CLI instructions below to inspect this volume directly.
 
@@ -116,7 +139,52 @@ $env:COREMATCH_API_URL = "http://127.0.0.1:8000"
 uv run mcp_server.py
 ```
 
+To run the MCP server over HTTP for LibreChat locally:
+
+```powershell
+$env:COREMATCH_API_URL = "http://127.0.0.1:8000"
+uv run mcp_server.py --transport streamable-http --host 127.0.0.1 --port 8001
+```
+
 The MCP tools support CRUD operations for drivers, vehicles, and orders, plus running the matching engine. Deletion deactivates drivers and vehicles; orders are deleted.
+
+For LibreChat, the Compose stack runs the MCP server over Streamable HTTP:
+
+```bash
+docker compose up --build
+```
+
+Use `http://localhost:3080` for LibreChat. The local stdio entry point remains
+available for MCP clients that launch the server as a subprocess:
+
+```bash
+uv run mcp_server.py
+```
+
+## Inspect the MCP server
+
+Start the Compose stack first, then use the latest MCP Inspector:
+
+```powershell
+npx @modelcontextprotocol/inspector@latest
+```
+
+Open the Inspector URL shown in the terminal and connect to:
+
+```text
+http://localhost:8001/mcp
+```
+
+For CLI inspection, specify an MCP method:
+
+```powershell
+npx @modelcontextprotocol/inspector@latest --cli `
+  http://localhost:8001/mcp `
+  --transport streamable-http `
+  --method tools/list
+```
+
+The `--method` option is required in CLI mode.
 
 ## Run the demo
 
