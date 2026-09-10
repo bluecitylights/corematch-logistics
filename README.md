@@ -16,16 +16,19 @@ Bitmap set intersection runs in microseconds, making the engine practical for th
 
 ```
 corematch-logistics/
-├── schema.sql            # DuckDB DDL: sequences, drivers, vehicles, orders, index_store
-├── engine.py             # Matching engine + demo entry-point (_seed_demo / __main__)
-├── app.py                # FastAPI web application (HTMX UI + REST endpoints)
-├── templates/            # Jinja2 HTML templates
-│   ├── base.html         # Nav + layout
-│   ├── index.html        # Dashboard (stats + match runner)
-│   ├── drivers.html      # Drivers list + add form
-│   ├── vehicles.html     # Vehicles list + add form
-│   ├── orders.html       # Orders list + add form
-│   └── partials/         # HTMX swap targets
+├── engine/               # Matching engine package
+│   ├── __init__.py       # Public engine exports
+│   └── matching.py       # Matching algorithm and demo entry-point
+├── app.py                # FastAPI application wiring and startup
+├── db/                   # DuckDB connection, helpers, and schema
+│   └── schema.sql        # DuckDB DDL: drivers, vehicles, orders, index_store
+├── api/                  # REST API routes
+├── ui/                   # HTML/HTMX routes and templates
+│   ├── routes.py         # UI route handlers
+│   └── templates/        # Jinja2 HTML templates
+├── mcp_tools/            # FastMCP server implementation
+├── mcp_server.py         # FastMCP compatibility entry point
+├── librechat.yaml        # LibreChat MCP server configuration
 ├── Dockerfile            # Container image
 ├── docker-compose.yaml   # App service
 ├── test_engine.py        # pytest test suite (11 tests, 3 acceptance-criteria groups)
@@ -39,9 +42,31 @@ corematch-logistics/
 docker compose up --build
 ```
 
+LibreChat starts with the CoreMatch MCP server configured through
+`librechat.yaml`. You still need to configure an LLM provider/API key for
+LibreChat before sending messages. The MCP server calls the app internally at
+`http://app:8000`; it does not access DuckDB directly.
+
+LibreChat also requires application secrets. Create a `.env` file in the
+repository root before starting the stack:
+
+```powershell
+@"
+JWT_SECRET=$(-join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) }))
+JWT_REFRESH_SECRET=$(-join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) }))
+CREDS_KEY=$(-join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) }))
+CREDS_IV=$(-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) }))
+"@ | Set-Content .env
+```
+
+Alternatively, set these four environment variables in your shell. Do not
+commit `.env` or reuse these development values in production.
+
 | Service | URL | Description |
 |---|---|---|
 | Web UI | [http://localhost:8000](http://localhost:8000) | HTMX dashboard — manage drivers, vehicles, orders, run matching |
+| LibreChat | [http://localhost:3080](http://localhost:3080) | Chat UI with the CoreMatch MCP tools configured |
+| MCP HTTP | [http://localhost:8001/mcp](http://localhost:8001/mcp) | Streamable HTTP MCP endpoint for LibreChat |
 
 The database is stored in a named Docker volume (`db_data`) so data persists across restarts. Use the **Seed demo data** button on the dashboard to populate it on first run. Use the DuckDB CLI instructions below to inspect this volume directly.
 
@@ -99,10 +124,72 @@ uv run uvicorn app:app --reload --host 127.0.0.1 --port 8000
 
 Open [http://localhost:8000](http://localhost:8000). Use the **Seed demo data** button on the dashboard to populate the database on first run.
 
+## Run the FastMCP server
+
+The FastMCP server calls the app's REST API; it does not open the DuckDB file directly. Start the web app first, then run:
+
+```bash
+uv run mcp_server.py
+```
+
+By default it connects to `http://127.0.0.1:8000`. To use another API URL:
+
+```powershell
+$env:COREMATCH_API_URL = "http://127.0.0.1:8000"
+uv run mcp_server.py
+```
+
+To run the MCP server over HTTP for LibreChat locally:
+
+```powershell
+$env:COREMATCH_API_URL = "http://127.0.0.1:8000"
+uv run mcp_server.py --transport streamable-http --host 127.0.0.1 --port 8001
+```
+
+The MCP tools support CRUD operations for drivers, vehicles, and orders, plus running the matching engine. Deletion deactivates drivers and vehicles; orders are deleted.
+
+For LibreChat, the Compose stack runs the MCP server over Streamable HTTP:
+
+```bash
+docker compose up --build
+```
+
+Use `http://localhost:3080` for LibreChat. The local stdio entry point remains
+available for MCP clients that launch the server as a subprocess:
+
+```bash
+uv run mcp_server.py
+```
+
+## Inspect the MCP server
+
+Start the Compose stack first, then use the latest MCP Inspector:
+
+```powershell
+npx @modelcontextprotocol/inspector@latest
+```
+
+Open the Inspector URL shown in the terminal and connect to:
+
+```text
+http://localhost:8001/mcp
+```
+
+For CLI inspection, specify an MCP method:
+
+```powershell
+npx @modelcontextprotocol/inspector@latest --cli `
+  http://localhost:8001/mcp `
+  --transport streamable-http `
+  --method tools/list
+```
+
+The `--method` option is required in CLI mode.
+
 ## Run the demo
 
 ```bash
-uv run engine.py
+uv run -m engine.matching
 ```
 
 Seeds a small dataset (5 drivers, 4 vehicles, 5 orders across Amsterdam / Rotterdam / Utrecht) and prints the assignment results:
@@ -157,5 +244,5 @@ print(results)
 
 ## Notes
 
-- **DuckDB 1.5 compatibility** — sequences must be declared with `MINVALUE 0` when starting at 0: `CREATE SEQUENCE s START 0 MINVALUE 0`. The provided `schema.sql` already handles this.
+- **DuckDB 1.5 compatibility** — sequences must be declared with `MINVALUE 0` when starting at 0: `CREATE SEQUENCE s START 0 MINVALUE 0`. The provided `db/schema.sql` already handles this.
 - Indexes (`index_store` table) are available for persisting serialized bitmaps between runs; the current engine rebuilds them from the relational tables on each invocation.
