@@ -54,3 +54,17 @@ CREATE TABLE distance_matrix (
     travel_time_min INTEGER NOT NULL,
     PRIMARY KEY (origin_zip, dest_zip)
 );
+
+CREATE TABLE plans (
+    plan_id VARCHAR PRIMARY KEY,
+    name VARCHAR NOT NULL
+);
+
+CREATE TABLE plan_orders (
+    plan_id VARCHAR NOT NULL,
+    order_id VARCHAR NOT NULL,
+    driver_id VARCHAR,
+    vehicle_id VARCHAR,
+    stop_sequence INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (plan_id, order_id)
+);

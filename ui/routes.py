@@ -15,6 +15,10 @@ from services.resources import (
     create_vehicle,
     list_orders,
     list_locations,
+    list_plans,
+    create_plan,
+    get_plan,
+    generate_plan,
     list_resources,
     update_driver,
     update_vehicle,
@@ -78,6 +82,28 @@ async def drivers_page(request: Request):
 async def locations_page(request: Request):
     locations = _locations_context()
     return _tmpl(request, "locations.html", {"locations": locations})
+
+
+@router.get("/plans", response_class=HTMLResponse)
+async def plans_page(request: Request):
+    plans = [get_plan(plan["plan_id"]) for plan in list_plans()]
+    return _tmpl(request, "plans.html", {"plans": plans})
+
+
+@router.post("/plans", response_class=HTMLResponse)
+async def add_plan(
+    request: Request,
+    plan_id: str = Form(...),
+    name: str = Form(...),
+):
+    create_plan({"plan_id": plan_id, "name": name})
+    return await plans_page(request)
+
+
+@router.post("/plans/{plan_id}/match", response_class=HTMLResponse)
+async def run_plan_match(plan_id: str, request: Request):
+    generate_plan(plan_id)
+    return await plans_page(request)
 
 
 @router.post("/locations", response_class=HTMLResponse)

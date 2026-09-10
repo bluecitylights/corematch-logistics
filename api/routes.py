@@ -11,9 +11,14 @@ from services.resources import (
     create_order,
     create_location,
     create_vehicle,
+    create_plan,
+    add_plan_order,
     delete_order,
     list_orders,
     list_locations,
+    list_plans,
+    get_plan,
+    generate_plan,
     list_resources,
     update_driver,
     update_order,
@@ -116,6 +121,36 @@ async def api_create_order(payload: dict = Body(...)):
     if any(field not in payload for field in required):
         raise HTTPException(400, "order_id and destination_location_id are required")
     return create_order(payload)
+
+
+@router.get("/plans")
+async def api_plans():
+    return list_plans()
+
+
+@router.post("/plans")
+async def api_create_plan(payload: dict = Body(...)):
+    required = ("plan_id", "name")
+    if any(field not in payload for field in required):
+        raise HTTPException(400, "plan_id and name are required")
+    return create_plan(payload)
+
+
+@router.get("/plans/{plan_id}")
+async def api_plan(plan_id: str):
+    return get_plan(plan_id)
+
+
+@router.post("/plans/{plan_id}/orders")
+async def api_add_plan_order(plan_id: str, payload: dict = Body(...)):
+    if "order_id" not in payload:
+        raise HTTPException(400, "order_id is required")
+    return add_plan_order(plan_id, payload)
+
+
+@router.post("/plans/{plan_id}/match")
+async def api_generate_plan(plan_id: str):
+    return generate_plan(plan_id)
 
 
 @router.patch("/orders/{order_id}")
