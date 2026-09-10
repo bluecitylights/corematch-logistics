@@ -39,6 +39,26 @@ def ensure_schema() -> None:
         if "drivers" not in tables:
             init_schema(con)
         ensure_location_schema(con)
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS plans (
+                plan_id VARCHAR PRIMARY KEY,
+                name VARCHAR NOT NULL
+            )
+            """
+        )
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS plan_orders (
+                plan_id VARCHAR NOT NULL,
+                order_id VARCHAR NOT NULL,
+                driver_id VARCHAR,
+                vehicle_id VARCHAR,
+                stop_sequence INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (plan_id, order_id)
+            )
+            """
+        )
 
 
 def api_rows(

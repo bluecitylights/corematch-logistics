@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Plans — CoreMatch-Logistics{% endblock %}
+{% block content %}
+
+<h1 class="text-2xl font-bold mb-6">Plans</h1>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2 space-y-6">
+    {% for plan in plans %}
+    <section class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-semibold">{{ plan.plan_id }} — {{ plan.name }}</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <div>
+          <h3 class="text-sm font-semibold text-gray-600 mb-2">By driver</h3>
+          {% for driver_id, orders in plan.orders_by_driver.items() %}
+          <div class="mb-2">
+            <div class="font-mono text-sm">{{ driver_id }}</div>
+            <div class="text-xs text-gray-500">{{ orders | map(attribute='order_id') | join(', ') }}</div>
+          </div>
+          {% else %}
+          <p class="text-sm text-gray-400">No driver assignments.</p>
+          {% endfor %}
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-gray-600 mb-2">By vehicle</h3>
+          {% for vehicle_id, orders in plan.orders_by_vehicle.items() %}
+          <div class="mb-2">
+            <div class="font-mono text-sm">{{ vehicle_id }}</div>
+            <div class="text-xs text-gray-500">{{ orders | map(attribute='order_id') | join(', ') }}</div>
+          </div>
+          {% else %}
+          <p class="text-sm text-gray-400">No vehicle assignments.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+    {% else %}
+    <p class="text-gray-400">No plans yet.</p>
+    {% endfor %}
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-6">
+    <h2 class="text-base font-semibold mb-4">Add Plan</h2>
+    <form method="post" action="/plans" class="space-y-3">
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Plan ID</label>
+        <input name="plan_id" required placeholder="PLAN-001"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Name</label>
+        <input name="name" required placeholder="Monday delivery plan"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+      </div>
+      <button type="submit"
+        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg text-sm">
+        Add Plan
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -87,3 +87,105 @@ def delete_order(order_id: str) -> dict[str, Any]:
             raise HTTPException(404, f"Order not found: {order_id}")
         con.execute("DELETE FROM orders WHERE order_id = ?", [order_id])
         return rows[0]
+
+
+def list_plans() -> list[dict[str, Any]]:
+    with get_db() as con:
+        return api_rows(con, "SELECT plan_id, name FROM plans ORDER BY plan_id")
+
+
+def create_plan(payload: dict[str, Any]) -> dict[str, Any]:
+    with get_db() as con:
+        con.execute(
+            "INSERT INTO plans (plan_id, name) VALUES (?, ?)",
+            [payload["plan_id"], payload["name"]],
+        )
+        return api_rows(
+            con,
+            "SELECT plan_id, name FROM plans WHERE plan_id = ?",
+            [payload["plan_id"]],
+        )[0]
+
+
+def get_plan(plan_id: str) -> dict[str, Any]:
+    with get_db() as con:
+        plans = api_rows(
+            con, "SELECT plan_id, name FROM plans WHERE plan_id = ?", [plan_id]
+        )
+        if not plans:
+            raise HTTPException(404, f"Plan not found: {plan_id}")
+        assignments = api_rows(
+            con,
+            """
+            SELECT plan_id, order_id, driver_id, vehicle_id, stop_sequence
+            FROM plan_orders
+            WHERE plan_id = ?
+            ORDER BY stop_sequence, order_id
+            """,
+            [plan_id],
+        )
+    return {
+        **plans[0],
+        "orders": assignments,
+        "orders_by_driver": _group_plan_orders(assignments, "driver_id"),
+        "orders_by_vehicle": _group_plan_orders(assignments, "vehicle_id"),
+    }
+
+
+def _group_plan_orders(
+    assignments: list[dict[str, Any]], key: str
+) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for assignment in assignments:
+        resource_id = assignment[key]
+        if resource_id is not None:
+            grouped.setdefault(resource_id, []).append(assignment)
+    return grouped
+
+
+def add_plan_order(plan_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    driver_id = payload.get("driver_id")
+    vehicle_id = payload.get("vehicle_id")
+    if not driver_id or not vehicle_id:
+        raise HTTPException(
+            400,
+            "driver_id and vehicle_id are required; a plan uses one driver-vehicle combination",
+        )
+    with get_db() as con:
+        if not api_rows(con, "SELECT 1 FROM plans WHERE plan_id = ?", [plan_id]):
+            raise HTTPException(404, f"Plan not found: {plan_id}")
+        if not api_rows(con, "SELECT 1 FROM orders WHERE order_id = ?", [payload["order_id"]]):
+            raise HTTPException(404, f"Order not found: {payload['order_id']}")
+        existing = api_rows(
+            con,
+            """
+            SELECT DISTINCT driver_id, vehicle_id
+            FROM plan_orders
+            WHERE plan_id = ?
+            """,
+            [plan_id],
+        )
+        if existing and any(
+            assignment["driver_id"] != driver_id
+            or assignment["vehicle_id"] != vehicle_id
+            for assignment in existing
+        ):
+            raise HTTPException(
+                409,
+                f"Plan {plan_id} already uses a different driver-vehicle combination",
+            )
+        con.execute(
+            """
+            INSERT INTO plan_orders
+                (plan_id, order_id, driver_id, vehicle_id, stop_sequence)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                plan_id,
+                payload["order_id"],
+                driver_id,
+                vehicle_id,
+                payload.get("stop_sequence", 0),
+            ],
+        )
+    return get_plan(plan_id)
