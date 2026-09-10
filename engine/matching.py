@@ -204,7 +204,28 @@ def evaluate_plan_routes(
         )
         route_clocks[route] = arrival
         route_locations[route] = row["destination_zip"]
-    return evaluated
+    route_summaries = []
+    for route, last_stop in route_locations.items():
+        route_rows = [row for row in rows if (row["driver_id"], row["vehicle_id"]) == route]
+        start_zip = route_rows[0]["start_zip"]
+        departure = route_clocks[route]
+        return_time = travel_times.get((last_stop, start_zip))
+        if return_time is None:
+            raise ValueError(f"No distance matrix entry from {last_stop} to {start_zip}")
+        arrival = departure + timedelta(minutes=return_time)
+        route_summaries.append(
+            {
+                "plan_id": route_rows[0].get("plan_id"),
+                "driver_id": route[0],
+                "vehicle_id": route[1],
+                "start_zip": start_zip,
+                "last_stop_zip": last_stop,
+                "return_driving_time_min": return_time,
+                "return_departure_time": departure.strftime("%H:%M"),
+                "return_arrival_time": arrival.strftime("%H:%M"),
+            }
+        )
+    return {"stops": evaluated, "routes": route_summaries}
 
 
 # --------------------------------------------------------------------------- #

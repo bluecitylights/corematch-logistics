@@ -137,12 +137,25 @@ def get_plan(plan_id: str) -> dict[str, Any]:
             """,
             [plan_id],
         )
+        route_evaluation = api_rows(
+            con,
+            """
+            SELECT plan_id, driver_id, vehicle_id, start_zip, last_stop_zip,
+                   return_driving_time_min, return_departure_time,
+                   return_arrival_time
+            FROM plan_route_evaluations
+            WHERE plan_id = ?
+            ORDER BY driver_id, vehicle_id
+            """,
+            [plan_id],
+        )
     return {
         **plans[0],
         "orders": assignments,
         "orders_by_driver": _group_plan_orders(assignments, "driver_id"),
         "orders_by_vehicle": _group_plan_orders(assignments, "vehicle_id"),
         "evaluation": evaluation,
+        "route_evaluation": route_evaluation,
     }
 
 
@@ -269,6 +282,7 @@ def evaluate_plan(plan_id: str) -> dict[str, Any]:
         raise HTTPException(422, str(exc)) from exc
     with get_db() as con:
         con.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
+        con.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
         con.executemany(
             """
             INSERT INTO plan_evaluations
@@ -290,7 +304,29 @@ def evaluate_plan(plan_id: str) -> dict[str, Any]:
                     item["departure_time"],
                     item["arrival_time"],
                 )
-                for item in evaluated
+                for item in evaluated["stops"]
+            ],
+        )
+        con.executemany(
+            """
+            INSERT INTO plan_route_evaluations
+                (plan_id, driver_id, vehicle_id, start_zip, last_stop_zip,
+                 return_driving_time_min, return_departure_time,
+                 return_arrival_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    plan_id,
+                    item["driver_id"],
+                    item["vehicle_id"],
+                    item["start_zip"],
+                    item["last_stop_zip"],
+                    item["return_driving_time_min"],
+                    item["return_departure_time"],
+                    item["return_arrival_time"],
+                )
+                for item in evaluated["routes"]
             ],
         )
     return get_plan(plan_id)

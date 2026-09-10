@@ -76,6 +76,21 @@ def ensure_schema() -> None:
             )
             """
         )
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS plan_route_evaluations (
+                plan_id VARCHAR NOT NULL,
+                driver_id VARCHAR NOT NULL,
+                vehicle_id VARCHAR NOT NULL,
+                start_zip VARCHAR NOT NULL,
+                last_stop_zip VARCHAR NOT NULL,
+                return_driving_time_min INTEGER NOT NULL,
+                return_departure_time VARCHAR NOT NULL,
+                return_arrival_time VARCHAR NOT NULL,
+                PRIMARY KEY (plan_id, driver_id, vehicle_id)
+            )
+            """
+        )
 
 
 def api_rows(
