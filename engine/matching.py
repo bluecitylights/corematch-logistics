@@ -55,17 +55,17 @@ def run_corematch_logistics(db_path: str = ":memory:") -> pd.DataFrame:
     )
 
     # Location indexes  (destination → set of driver/vehicle indexes at that location)
-    driver_locs: dict[str, BitMap] = {
+    driver_locs: dict[int, BitMap] = {
         loc: BitMap(
-            drivers_df.loc[drivers_df["location"] == loc, "driver_index"].tolist()
+            drivers_df.loc[drivers_df["location_id"] == loc, "driver_index"].tolist()
         )
-        for loc in drivers_df["location"].dropna().unique()
+        for loc in drivers_df["location_id"].dropna().unique()
     }
-    vehicle_locs: dict[str, BitMap] = {
+    vehicle_locs: dict[int, BitMap] = {
         loc: BitMap(
-            vehicles_df.loc[vehicles_df["location"] == loc, "vehicle_index"].tolist()
+            vehicles_df.loc[vehicles_df["location_id"] == loc, "vehicle_index"].tolist()
         )
-        for loc in vehicles_df["location"].dropna().unique()
+        for loc in vehicles_df["location_id"].dropna().unique()
     }
 
     # Skill / spec feature indexes
@@ -98,7 +98,7 @@ def run_corematch_logistics(db_path: str = ":memory:") -> pd.DataFrame:
     results: list[dict] = []
 
     for _, order in orders_df.iterrows():
-        dest = order.get("destination")
+        dest = order.get("destination_location_id")
 
         # --- Driver candidate pool ---
         if dest and dest in driver_locs:
@@ -174,41 +174,55 @@ def run_corematch_logistics(db_path: str = ":memory:") -> pd.DataFrame:
 # --------------------------------------------------------------------------- #
 def _seed_demo(con: duckdb.DuckDBPyConnection) -> None:
     """Insert a small representative dataset for a quick smoke-test."""
+    demo_locations = [
+        ("1012", "Amsterdam", 52.3728, 4.8936),
+        ("3011", "Rotterdam", 51.9244, 4.4777),
+        ("3511", "Utrecht", 52.0907, 5.1214),
+    ]
     con.executemany(
-        "INSERT INTO drivers (driver_id, location, is_active, skill_adr, skill_ehbo) "
+        """
+        INSERT INTO locations (zip, city, latitude, longitude)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT (zip) DO NOTHING
+        """,
+        demo_locations,
+    )
+    location_ids = {
+        city: location_id
+        for location_id, city in con.execute(
+            "SELECT location_id, city FROM locations WHERE city IN ('Amsterdam', 'Rotterdam', 'Utrecht')"
+        ).fetchall()
+    }
+    con.executemany(
+        "INSERT INTO drivers (driver_id, location_id, is_active, skill_adr, skill_ehbo) "
         "VALUES (?, ?, ?, ?, ?)",
         [
-            ("DRV-001", "Amsterdam", True, True, False),
-            ("DRV-002", "Amsterdam", True, False, True),
-            ("DRV-003", "Rotterdam", True, True, True),
-            ("DRV-004", "Utrecht",   True, False, False),
-            ("DRV-005", "Amsterdam", False, True, True),   # inactive
+            ("DRV-001", location_ids["Amsterdam"], True, True, False),
+            ("DRV-002", location_ids["Amsterdam"], True, False, True),
+            ("DRV-003", location_ids["Rotterdam"], True, True, True),
+            ("DRV-004", location_ids["Utrecht"], True, False, False),
+            ("DRV-005", location_ids["Amsterdam"], False, True, True),
         ],
     )
     con.executemany(
-        "INSERT INTO vehicles (vehicle_id, license_plate, location, is_active, "
+        "INSERT INTO vehicles (vehicle_id, license_plate, location_id, is_active, "
         "spec_liftgate, spec_refrigerated) VALUES (?, ?, ?, ?, ?, ?)",
         [
-            ("VEH-001", "AB-12-CD", "Amsterdam", True, True, False),
-            ("VEH-002", "EF-34-GH", "Amsterdam", True, False, True),
-            ("VEH-003", "IJ-56-KL", "Rotterdam", True, True, True),
-            ("VEH-004", "MN-78-OP", "Utrecht",   True, False, False),
+            ("VEH-001", "AB-12-CD", location_ids["Amsterdam"], True, True, False),
+            ("VEH-002", "EF-34-GH", location_ids["Amsterdam"], True, False, True),
+            ("VEH-003", "IJ-56-KL", location_ids["Rotterdam"], True, True, True),
+            ("VEH-004", "MN-78-OP", location_ids["Utrecht"], True, False, False),
         ],
     )
     con.executemany(
-        "INSERT INTO orders (order_id, destination, req_driver_adr, req_driver_ehbo, "
+        "INSERT INTO orders (order_id, destination_location_id, req_driver_adr, req_driver_ehbo, "
         "req_vehicle_liftgate, req_vehicle_refrigerated) VALUES (?, ?, ?, ?, ?, ?)",
         [
-            # Both ADR driver + liftgate vehicle at Amsterdam
-            ("ORD-001", "Amsterdam", True, False, True, False),
-            # EHBO driver + refrigerated vehicle at Amsterdam
-            ("ORD-002", "Amsterdam", False, True, False, True),
-            # No special requirements at Rotterdam
-            ("ORD-003", "Rotterdam", False, False, False, False),
-            # ADR + EHBO driver required — only DRV-003 qualifies (Rotterdam)
-            ("ORD-004", "Rotterdam", True, True, False, False),
-            # Impossible: ADR driver required at Utrecht, but DRV-004 lacks ADR
-            ("ORD-005", "Utrecht",   True, False, False, False),
+            ("ORD-001", location_ids["Amsterdam"], True, False, True, False),
+            ("ORD-002", location_ids["Amsterdam"], False, True, False, True),
+            ("ORD-003", location_ids["Rotterdam"], False, False, False, False),
+            ("ORD-004", location_ids["Rotterdam"], True, True, False, False),
+            ("ORD-005", location_ids["Utrecht"], True, False, False, False),
         ],
     )
 
