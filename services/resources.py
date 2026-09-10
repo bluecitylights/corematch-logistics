@@ -200,29 +200,23 @@ def generate_plan(plan_id: str) -> dict[str, Any]:
         result for result in results
         if result["status"] == "Fully Matched"
     ]
-    combinations = {
-        (result["assigned_driver"], result["assigned_vehicle"])
-        for result in matched
-    }
-    if len(combinations) > 1:
-        raise HTTPException(
-            409,
-            "Matching produced multiple driver-vehicle combinations. "
-            "Run matching for one route at a time to generate this plan.",
-        )
     with get_db() as con:
         con.execute("DELETE FROM plan_orders WHERE plan_id = ?", [plan_id])
-        if combinations:
-            driver_id, vehicle_id = next(iter(combinations))
-            con.executemany(
-                """
-                INSERT INTO plan_orders
-                    (plan_id, order_id, driver_id, vehicle_id, stop_sequence)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                [
-                    (plan_id, result["order_id"], driver_id, vehicle_id, sequence)
-                    for sequence, result in enumerate(matched, start=1)
-                ],
-            )
+        con.executemany(
+            """
+            INSERT INTO plan_orders
+                (plan_id, order_id, driver_id, vehicle_id, stop_sequence)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    plan_id,
+                    result["order_id"],
+                    result["assigned_driver"],
+                    result["assigned_vehicle"],
+                    sequence,
+                )
+                for sequence, result in enumerate(matched, start=1)
+            ],
+        )
     return get_plan(plan["plan_id"])
