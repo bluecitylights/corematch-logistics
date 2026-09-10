@@ -9,6 +9,7 @@ import duckdb
 from fastapi import HTTPException
 
 from engine import init_schema
+from db.locations import ensure_location_schema
 
 
 DB_PATH = os.environ.get(
@@ -37,6 +38,7 @@ def ensure_schema() -> None:
         }
         if "drivers" not in tables:
             init_schema(con)
+        ensure_location_schema(con)
 
 
 def api_rows(

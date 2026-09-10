@@ -29,13 +29,13 @@ def list_drivers(include_inactive: bool = False) -> list[dict[str, Any]]:
 
 
 @mcp.tool
-def create_driver(driver_id: str, location: str, skill_adr: bool = False, skill_ehbo: bool = False) -> dict[str, Any]:
+def create_driver(driver_id: str, location_id: int, skill_adr: bool = False, skill_ehbo: bool = False) -> dict[str, Any]:
     """Create a driver through the CoreMatch REST API."""
     return _request("POST", "/api/drivers", locals())
 
 
 @mcp.tool
-def update_driver(driver_id: str, location: str | None = None, is_active: bool | None = None, skill_adr: bool | None = None, skill_ehbo: bool | None = None) -> dict[str, Any]:
+def update_driver(driver_id: str, location_id: int | None = None, is_active: bool | None = None, skill_adr: bool | None = None, skill_ehbo: bool | None = None) -> dict[str, Any]:
     """Update a driver through the CoreMatch REST API."""
     return _request("PATCH", f"/api/drivers/{driver_id}", {key: value for key, value in locals().items() if key != "driver_id" and value is not None})
 
@@ -53,13 +53,13 @@ def list_vehicles(include_inactive: bool = False) -> list[dict[str, Any]]:
 
 
 @mcp.tool
-def create_vehicle(vehicle_id: str, license_plate: str, location: str, spec_liftgate: bool = False, spec_refrigerated: bool = False) -> dict[str, Any]:
+def create_vehicle(vehicle_id: str, license_plate: str, location_id: int, spec_liftgate: bool = False, spec_refrigerated: bool = False) -> dict[str, Any]:
     """Create a vehicle through the CoreMatch REST API."""
     return _request("POST", "/api/vehicles", locals())
 
 
 @mcp.tool
-def update_vehicle(vehicle_id: str, license_plate: str | None = None, location: str | None = None, is_active: bool | None = None, spec_liftgate: bool | None = None, spec_refrigerated: bool | None = None) -> dict[str, Any]:
+def update_vehicle(vehicle_id: str, license_plate: str | None = None, location_id: int | None = None, is_active: bool | None = None, spec_liftgate: bool | None = None, spec_refrigerated: bool | None = None) -> dict[str, Any]:
     """Update a vehicle through the CoreMatch REST API."""
     return _request("PATCH", f"/api/vehicles/{vehicle_id}", {key: value for key, value in locals().items() if key != "vehicle_id" and value is not None})
 
@@ -77,13 +77,13 @@ def list_orders() -> list[dict[str, Any]]:
 
 
 @mcp.tool
-def create_order(order_id: str, destination: str, req_driver_adr: bool = False, req_driver_ehbo: bool = False, req_vehicle_liftgate: bool = False, req_vehicle_refrigerated: bool = False) -> dict[str, Any]:
+def create_order(order_id: str, destination_location_id: int, req_driver_adr: bool = False, req_driver_ehbo: bool = False, req_vehicle_liftgate: bool = False, req_vehicle_refrigerated: bool = False) -> dict[str, Any]:
     """Create an order through the CoreMatch REST API."""
     return _request("POST", "/api/orders", locals())
 
 
 @mcp.tool
-def update_order(order_id: str, destination: str | None = None, req_driver_adr: bool | None = None, req_driver_ehbo: bool | None = None, req_vehicle_liftgate: bool | None = None, req_vehicle_refrigerated: bool | None = None) -> dict[str, Any]:
+def update_order(order_id: str, destination_location_id: int | None = None, req_driver_adr: bool | None = None, req_driver_ehbo: bool | None = None, req_vehicle_liftgate: bool | None = None, req_vehicle_refrigerated: bool | None = None) -> dict[str, Any]:
     """Update an order through the CoreMatch REST API."""
     return _request("PATCH", f"/api/orders/{order_id}", {key: value for key, value in locals().items() if key != "order_id" and value is not None})
 
