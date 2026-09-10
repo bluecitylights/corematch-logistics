@@ -122,6 +122,13 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
+              <tr class="bg-indigo-50">
+                <td class="px-3 py-2">0</td>
+                <td class="px-3 py-2 font-mono font-semibold">START</td>
+                <td class="px-3 py-2">0</td>
+                <td class="px-3 py-2">09:00</td>
+                <td class="px-3 py-2">–</td>
+              </tr>
               {% for stop in route.stops %}
               {% set evaluated = stop.evaluation %}
               <tr>
@@ -153,6 +160,17 @@
               {% else %}
               <tr><td colspan="5" class="px-3 py-4 text-gray-400">No stops.</td></tr>
               {% endfor %}
+              <tr class="bg-indigo-50">
+                <td class="px-3 py-2">{{ route.stops|length + 1 }}</td>
+                <td class="px-3 py-2 font-mono font-semibold">END</td>
+                <td class="px-3 py-2">
+                  {{ route.return.return_driving_time_min if route.return else '–' }}
+                </td>
+                <td class="px-3 py-2">–</td>
+                <td class="px-3 py-2">
+                  {{ route.return.return_arrival_time if route.return else '–' }}
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
