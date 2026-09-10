@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Locations — CoreMatch-Logistics{% endblock %}
+{% block content %}
+
+<h1 class="text-2xl font-bold mb-6">Locations</h1>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2 bg-white rounded-xl shadow overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="bg-gray-100 text-left text-gray-600 uppercase text-xs">
+          <th class="px-4 py-2">Address</th>
+          <th class="px-4 py-2">Latitude</th>
+          <th class="px-4 py-2">Longitude</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for location in locations %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-2">{{ location.address }}</td>
+          <td class="px-4 py-2">{{ location.latitude }}</td>
+          <td class="px-4 py-2">{{ location.longitude }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="px-4 py-6 text-center text-gray-400">No locations yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-6">
+    <h2 class="text-base font-semibold mb-4">Add Location</h2>
+    <form method="post" action="/locations" class="space-y-3">
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Postcode</label>
+        <input name="zip" required placeholder="1544"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">City</label>
+        <input name="city" required placeholder="Zaandijk"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Latitude</label>
+          <input name="latitude" type="number" step="any" required placeholder="52.4833"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Longitude</label>
+          <input name="longitude" type="number" step="any" required placeholder="4.8167"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <button type="submit"
+        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg text-sm">
+        Add Location
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -11,8 +11,10 @@ from engine import run_corematch_logistics
 from services.resources import (
     create_driver,
     create_order,
+    create_location,
     create_vehicle,
     list_orders,
+    list_locations,
     list_resources,
     update_driver,
     update_vehicle,
@@ -35,6 +37,17 @@ def _tmpl(request: Request, name: str, ctx: dict):
     return templates.TemplateResponse(request, name, ctx)
 
 
+def _location_label(location: dict) -> str:
+    return f"{location['zip']} {location['city']}"
+
+
+def _locations_context() -> list[dict]:
+    return [
+        {**location, "address": _location_label(location)}
+        for location in list_locations()
+    ]
+
+
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     with get_db() as con:
@@ -51,13 +64,37 @@ async def index(request: Request):
 @router.get("/drivers", response_class=HTMLResponse)
 async def drivers_page(request: Request):
     drivers = list_resources("drivers", include_inactive=True)
+    locations = {location["location_id"]: location["address"] for location in _locations_context()}
     rows = [
         (driver["driver_id"], driver["location_id"], driver["is_active"],
-         driver["skill_adr"], driver["skill_ehbo"])
+        driver["skill_adr"], driver["skill_ehbo"], locations.get(driver["location_id"], "Unknown"))
         for driver in drivers
     ]
     template = "partials/drivers.html" if _is_htmx(request) else "drivers.html"
-    return _tmpl(request, template, {"drivers": rows})
+    return _tmpl(request, template, {"drivers": rows, "locations": _locations_context()})
+
+
+@router.get("/locations", response_class=HTMLResponse)
+async def locations_page(request: Request):
+    locations = _locations_context()
+    return _tmpl(request, "locations.html", {"locations": locations})
+
+
+@router.post("/locations", response_class=HTMLResponse)
+async def add_location(
+    request: Request,
+    zip: str = Form(...),
+    city: str = Form(...),
+    latitude: float = Form(...),
+    longitude: float = Form(...),
+):
+    create_location({
+        "zip": zip,
+        "city": city,
+        "latitude": latitude,
+        "longitude": longitude,
+    })
+    return await locations_page(request)
 
 
 @router.post("/drivers", response_class=HTMLResponse)
@@ -86,13 +123,15 @@ async def deactivate_driver(driver_id: str, request: Request):
 @router.get("/vehicles", response_class=HTMLResponse)
 async def vehicles_page(request: Request):
     vehicles = list_resources("vehicles", include_inactive=True)
+    locations = {location["location_id"]: location["address"] for location in _locations_context()}
     rows = [
         (vehicle["vehicle_id"], vehicle["license_plate"], vehicle["location_id"],
-         vehicle["is_active"], vehicle["spec_liftgate"], vehicle["spec_refrigerated"])
+         vehicle["is_active"], vehicle["spec_liftgate"], vehicle["spec_refrigerated"],
+         locations.get(vehicle["location_id"], "Unknown"))
         for vehicle in vehicles
     ]
     template = "partials/vehicles.html" if _is_htmx(request) else "vehicles.html"
-    return _tmpl(request, template, {"vehicles": rows})
+    return _tmpl(request, template, {"vehicles": rows, "locations": _locations_context()})
 
 
 @router.post("/vehicles", response_class=HTMLResponse)
@@ -123,14 +162,16 @@ async def deactivate_vehicle(vehicle_id: str, request: Request):
 @router.get("/orders", response_class=HTMLResponse)
 async def orders_page(request: Request):
     orders = list_orders()
+    locations = {location["location_id"]: location["address"] for location in _locations_context()}
     rows = [
         (order["order_id"], order["destination_location_id"], order["req_driver_adr"],
          order["req_driver_ehbo"], order["req_vehicle_liftgate"],
-         order["req_vehicle_refrigerated"])
+         order["req_vehicle_refrigerated"],
+         locations.get(order["destination_location_id"], "Unknown"))
         for order in orders
     ]
     template = "partials/orders.html" if _is_htmx(request) else "orders.html"
-    return _tmpl(request, template, {"orders": rows})
+    return _tmpl(request, template, {"orders": rows, "locations": _locations_context()})
 
 
 @router.post("/orders", response_class=HTMLResponse)

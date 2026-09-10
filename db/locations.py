@@ -29,6 +29,25 @@ def _distance(origin: tuple[str, str, float, float], destination: tuple[str, str
     return round(km * 1000), 0 if origin[0] == destination[0] else round((km / 50) * 60)
 
 
+def rebuild_distance_matrix(con: duckdb.DuckDBPyConnection) -> None:
+    rows = con.execute(
+        "SELECT zip, city, latitude, longitude FROM locations ORDER BY zip"
+    ).fetchall()
+    matrix = [
+        (origin[0], destination[0], *_distance(origin, destination))
+        for origin in rows
+        for destination in rows
+    ]
+    con.execute("DELETE FROM distance_matrix")
+    con.executemany(
+        """
+        INSERT INTO distance_matrix (origin_zip, dest_zip, distance_m, travel_time_min)
+        VALUES (?, ?, ?, ?)
+        """,
+        matrix,
+    )
+
+
 def ensure_location_schema(con: duckdb.DuckDBPyConnection) -> None:
     """Create and seed location reference tables without replacing existing data."""
     con.execute("CREATE SEQUENCE IF NOT EXISTS location_seq START 0 MINVALUE 0")
@@ -94,19 +113,5 @@ def ensure_location_schema(con: duckdb.DuckDBPyConnection) -> None:
             )
             con.execute(f"ALTER TABLE {table} DROP COLUMN {old_column}")
 
-    rows = con.execute(
-        "SELECT zip, city, latitude, longitude FROM locations ORDER BY zip"
-    ).fetchall()
-    matrix = [
-        (origin[0], destination[0], *_distance(origin, destination))
-        for origin in rows
-        for destination in rows
-    ]
-    con.executemany(
-        """
-        INSERT INTO distance_matrix (origin_zip, dest_zip, distance_m, travel_time_min)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT (origin_zip, dest_zip) DO NOTHING
-        """,
-        matrix,
-    )
+    if con.execute("SELECT COUNT(*) FROM distance_matrix").fetchone()[0] == 0:
+        rebuild_distance_matrix(con)

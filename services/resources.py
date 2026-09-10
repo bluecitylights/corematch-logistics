@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from db import api_rows, api_update, get_db
+from db.locations import rebuild_distance_matrix
 
 
 def list_resources(table: str, include_inactive: bool = False) -> list[dict[str, Any]]:
@@ -44,6 +45,25 @@ def update_vehicle(vehicle_id: str, fields: dict[str, Any]) -> dict[str, Any]:
 def list_orders() -> list[dict[str, Any]]:
     with get_db() as con:
         return api_rows(con, "SELECT * FROM orders ORDER BY order_id")
+
+
+def list_locations() -> list[dict[str, Any]]:
+    with get_db() as con:
+        return api_rows(con, "SELECT * FROM locations ORDER BY zip")
+
+
+def create_location(payload: dict[str, Any]) -> dict[str, Any]:
+    with get_db() as con:
+        con.execute(
+            "INSERT INTO locations (zip, city, latitude, longitude) VALUES (?, ?, ?, ?)",
+            [payload["zip"], payload["city"], payload["latitude"], payload["longitude"]],
+        )
+        rebuild_distance_matrix(con)
+        return api_rows(
+            con,
+            "SELECT * FROM locations WHERE zip = ?",
+            [payload["zip"]],
+        )[0]
 
 
 def create_order(payload: dict[str, Any]) -> dict[str, Any]:

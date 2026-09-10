@@ -29,8 +29,15 @@
       </div>
       <div>
         <label class="block text-xs text-gray-500 mb-1">Destination</label>
-        <input name="destination_location_id" type="number" required placeholder="1"
+        <input name="destination_search" list="order-locations" data-location-field="destination_location_id"
+          oninput="setLocationId(this)" required placeholder="Search ZIP or city"
           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        <input name="destination_location_id" type="hidden" required />
+        <datalist id="order-locations">
+          {% for location in locations %}
+          <option value="{{ location.address }}" data-location-id="{{ location.location_id }}"></option>
+          {% endfor %}
+        </datalist>
       </div>
       <p class="text-xs text-gray-500 font-medium pt-1">Driver requirements</p>
       <div class="flex gap-4">
