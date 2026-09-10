@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ resource_type|title }} — CoreMatch-Logistics{% endblock %}
+{% block content %}
+<div class="max-w-2xl bg-white rounded-xl shadow p-6">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-xl font-bold">Edit {{ resource_type|title }} {{ resource_id }}</h1>
+    <a href="/{{ resource_type }}" class="text-sm text-indigo-600 hover:underline">Back to grid</a>
+  </div>
+  <form method="post" class="space-y-4">
+    {% if resource_type == "driver" %}
+    <p class="font-mono font-semibold">{{ resource.driver_id }}</p>
+    <label class="block text-sm">Location
+      <select name="location_id" class="mt-1 w-full border rounded-lg px-3 py-2">
+        {% for location in locations %}
+        <option value="{{ location.location_id }}" {% if location.location_id == resource.location_id %}selected{% endif %}>{{ location.address }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="flex gap-4">
+      <label><input type="checkbox" name="skill_adr" {% if resource.skill_adr %}checked{% endif %}> ADR</label>
+      <label><input type="checkbox" name="skill_ehbo" {% if resource.skill_ehbo %}checked{% endif %}> EHBO</label>
+    </div>
+    {% elif resource_type == "vehicle" %}
+    <p class="font-mono font-semibold">{{ resource.vehicle_id }}</p>
+    <label class="block text-sm">License plate
+      <input name="license_plate" value="{{ resource.license_plate }}" required class="mt-1 w-full border rounded-lg px-3 py-2">
+    </label>
+    <label class="block text-sm">Location
+      <select name="location_id" class="mt-1 w-full border rounded-lg px-3 py-2">
+        {% for location in locations %}
+        <option value="{{ location.location_id }}" {% if location.location_id == resource.location_id %}selected{% endif %}>{{ location.address }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="flex gap-4">
+      <label><input type="checkbox" name="spec_liftgate" {% if resource.spec_liftgate %}checked{% endif %}> Liftgate</label>
+      <label><input type="checkbox" name="spec_refrigerated" {% if resource.spec_refrigerated %}checked{% endif %}> Refrigerated</label>
+    </div>
+    {% else %}
+    <p class="font-mono font-semibold">{{ resource.order_id }}</p>
+    <label class="block text-sm">Destination
+      <select name="destination_location_id" class="mt-1 w-full border rounded-lg px-3 py-2">
+        {% for location in locations %}
+        <option value="{{ location.location_id }}" {% if location.location_id == resource.destination_location_id %}selected{% endif %}>{{ location.address }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="grid grid-cols-2 gap-3">
+      <label><input type="checkbox" name="req_driver_adr" {% if resource.req_driver_adr %}checked{% endif %}> ADR</label>
+      <label><input type="checkbox" name="req_driver_ehbo" {% if resource.req_driver_ehbo %}checked{% endif %}> EHBO</label>
+      <label><input type="checkbox" name="req_vehicle_liftgate" {% if resource.req_vehicle_liftgate %}checked{% endif %}> Liftgate</label>
+      <label><input type="checkbox" name="req_vehicle_refrigerated" {% if resource.req_vehicle_refrigerated %}checked{% endif %}> Refrigerated</label>
+    </div>
+    {% endif %}
+    {% if resource_type != "order" %}
+    <label><input type="checkbox" name="is_active" {% if resource.is_active %}checked{% endif %}> Active</label>
+    {% endif %}
+    <button class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg">Save</button>
+  </form>
+</div>
+{% endblock %}

@@ -17,6 +17,17 @@
         .find(item => item.value === input.value);
       input.form.elements[input.dataset.locationField].value = option?.dataset.locationId || "";
     }
+
+    function closeSidePanel() {
+      document.getElementById("side-panel").classList.add("hidden");
+      document.getElementById("side-panel-content").innerHTML = "";
+    }
+
+    document.addEventListener("htmx:afterSwap", event => {
+      if (event.detail.target.id === "side-panel-content") {
+        document.getElementById("side-panel").classList.remove("hidden");
+      }
+    });
   </script>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen">
@@ -37,6 +48,14 @@
   <main class="max-w-6xl mx-auto px-4 py-8">
     {% block content %}{% endblock %}
   </main>
+
+  <div id="side-panel" class="hidden fixed inset-0 z-50">
+    <button type="button" onclick="closeSidePanel()"
+      class="absolute inset-0 bg-black/30 cursor-default" aria-label="Close side panel"></button>
+    <aside class="absolute right-0 top-0 h-full w-full max-w-xl overflow-y-auto bg-gray-50 shadow-2xl">
+      <div id="side-panel-content"></div>
+    </aside>
+  </div>
 
 </body>
 </html>

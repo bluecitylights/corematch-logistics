@@ -13,7 +13,9 @@
   <tbody class="divide-y divide-gray-100">
     {% for v in vehicles %}
     <tr class="hover:bg-gray-50 {% if not v[3] %}opacity-40{% endif %}">
-      <td class="px-4 py-2 font-mono font-semibold">{{ v[0] }}</td>
+      <td class="px-4 py-2 font-mono font-semibold"><a class="text-indigo-600 hover:underline"
+        href="/vehicles/{{ v[0] }}/edit" hx-get="/vehicles/{{ v[0] }}/edit"
+        hx-target="#side-panel-content" hx-swap="innerHTML">{{ v[0] }}</a></td>
       <td class="px-4 py-2 font-mono text-xs">{{ v[1] }}</td>
       <td class="px-4 py-2">{{ v[6] }}</td>
       <td class="px-4 py-2 text-center">{{ '✓' if v[4] else '–' }}</td>

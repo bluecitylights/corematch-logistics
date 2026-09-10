@@ -218,24 +218,29 @@ def add_plan_order(plan_id: str, payload: dict[str, Any]) -> dict[str, Any]:
             raise HTTPException(404, f"Plan not found: {plan_id}")
         if not api_rows(con, "SELECT 1 FROM orders WHERE order_id = ?", [payload["order_id"]]):
             raise HTTPException(404, f"Order not found: {payload['order_id']}")
-        existing = api_rows(
+        if not api_rows(con, "SELECT 1 FROM drivers WHERE driver_id = ?", [driver_id]):
+            raise HTTPException(404, f"Driver not found: {driver_id}")
+        if not api_rows(con, "SELECT 1 FROM vehicles WHERE vehicle_id = ?", [vehicle_id]):
+            raise HTTPException(404, f"Vehicle not found: {vehicle_id}")
+        duplicate = api_rows(
             con,
             """
-            SELECT DISTINCT driver_id, vehicle_id
+            SELECT 1
             FROM plan_orders
-            WHERE plan_id = ?
+            WHERE plan_id = ? AND order_id = ?
             """,
-            [plan_id],
+            [plan_id, payload["order_id"]],
         )
-        if existing and any(
-            assignment["driver_id"] != driver_id
-            or assignment["vehicle_id"] != vehicle_id
-            for assignment in existing
-        ):
-            raise HTTPException(
-                409,
-                f"Plan {plan_id} already uses a different driver-vehicle combination",
-            )
+        if duplicate:
+            raise HTTPException(409, f"Order already exists in plan: {payload['order_id']}")
+        next_sequence = con.execute(
+            """
+            SELECT COALESCE(MAX(stop_sequence), 0) + 1
+            FROM plan_orders
+            WHERE plan_id = ? AND driver_id = ? AND vehicle_id = ?
+            """,
+            [plan_id, driver_id, vehicle_id],
+        ).fetchone()[0]
         con.execute(
             """
             INSERT INTO plan_orders
@@ -247,9 +252,11 @@ def add_plan_order(plan_id: str, payload: dict[str, Any]) -> dict[str, Any]:
                 payload["order_id"],
                 driver_id,
                 vehicle_id,
-                payload.get("stop_sequence", 0),
+                payload.get("stop_sequence", next_sequence),
             ],
         )
+        con.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
+        con.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
     return get_plan(plan_id)
 
 
