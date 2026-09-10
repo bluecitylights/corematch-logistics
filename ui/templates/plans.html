@@ -21,6 +21,25 @@
           Compute plan
         </button>
       </form>
+      <form method="post" action="/plans/{{ plan.plan_id }}/validate" class="mt-2">
+        <button type="submit"
+          class="bg-slate-600 hover:bg-slate-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">
+          Validate plan
+        </button>
+      </form>
+      {% if validation and validation.plan_id == plan.plan_id %}
+      <div class="mt-3 rounded-lg px-3 py-2 text-sm
+        {{ 'bg-green-100 text-green-800' if validation.valid else 'bg-red-100 text-red-800' }}">
+        {% if validation.valid %}
+        Plan is valid.
+        {% else %}
+        <strong>Plan has validation errors:</strong>
+        <ul class="list-disc ml-5 mt-1">
+          {% for error in validation.errors %}<li>{{ error }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+      {% endif %}
       <form method="post" action="/plans/{{ plan.plan_id }}/orders"
         class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2 border-t pt-4">
         <select name="driver_id" required class="border border-gray-300 rounded-lg px-3 py-2 text-sm">

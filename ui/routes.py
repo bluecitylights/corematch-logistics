@@ -21,6 +21,7 @@ from services.resources import (
     add_plan_order,
     generate_plan,
     evaluate_plan,
+    validate_plan,
     list_resources,
     update_driver,
     update_vehicle,
@@ -193,7 +194,7 @@ async def locations_page(request: Request):
 
 
 @router.get("/plans", response_class=HTMLResponse)
-async def plans_page(request: Request):
+async def plans_page(request: Request, validation: dict | None = None):
     plans = [get_plan(plan["plan_id"]) for plan in list_plans()]
     locations = {
         location["location_id"]: location["address"]
@@ -249,6 +250,7 @@ async def plans_page(request: Request):
             "drivers": drivers,
             "vehicles": vehicles,
             "orders": orders,
+            "validation": validation,
         },
     )
 
@@ -273,6 +275,11 @@ async def run_plan_match(plan_id: str, request: Request):
 async def evaluate_plan_page(plan_id: str, request: Request):
     evaluate_plan(plan_id)
     return await plans_page(request)
+
+
+@router.post("/plans/{plan_id}/validate", response_class=HTMLResponse)
+async def validate_plan_page(plan_id: str, request: Request):
+    return await plans_page(request, validate_plan(plan_id))
 
 
 @router.post("/plans/{plan_id}/orders", response_class=HTMLResponse)

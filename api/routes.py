@@ -20,6 +20,7 @@ from services.resources import (
     get_plan,
     generate_plan,
     evaluate_plan,
+    validate_plan,
     list_resources,
     update_driver,
     update_order,
@@ -157,6 +158,11 @@ async def api_generate_plan(plan_id: str):
 @router.post("/plans/{plan_id}/evaluate")
 async def api_evaluate_plan(plan_id: str):
     return evaluate_plan(plan_id)
+
+
+@router.post("/plans/{plan_id}/validate")
+async def api_validate_plan(plan_id: str):
+    return validate_plan(plan_id)
 
 
 @router.patch("/orders/{order_id}")

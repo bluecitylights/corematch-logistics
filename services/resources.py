@@ -184,6 +184,102 @@ def get_plan(plan_id: str) -> dict[str, Any]:
     }
 
 
+def validate_plan(plan_id: str) -> dict[str, Any]:
+    """Validate plan assignments without changing plan or evaluation data."""
+    errors: list[str] = []
+    with get_db() as con:
+        if not api_rows(con, "SELECT 1 FROM plans WHERE plan_id = ?", [plan_id]):
+            raise HTTPException(404, f"Plan not found: {plan_id}")
+        rows = api_rows(
+            con,
+            """
+            SELECT po.order_id, po.driver_id, po.vehicle_id,
+                   d.location_id AS driver_location_id,
+                   d.is_active AS driver_active,
+                   d.skill_adr, d.skill_ehbo,
+                   v.location_id AS vehicle_location_id,
+                   v.is_active AS vehicle_active,
+                   v.spec_liftgate, v.spec_refrigerated,
+                   o.req_driver_adr, o.req_driver_ehbo,
+                   o.req_vehicle_liftgate, o.req_vehicle_refrigerated,
+                   driver_location.zip AS driver_zip,
+                   vehicle_location.zip AS vehicle_zip
+            FROM plan_orders po
+            LEFT JOIN drivers d ON d.driver_id = po.driver_id
+            LEFT JOIN vehicles v ON v.vehicle_id = po.vehicle_id
+            LEFT JOIN orders o ON o.order_id = po.order_id
+            LEFT JOIN locations driver_location
+              ON driver_location.location_id = d.location_id
+            LEFT JOIN locations vehicle_location
+              ON vehicle_location.location_id = v.location_id
+            WHERE po.plan_id = ?
+            ORDER BY po.stop_sequence, po.order_id
+            """,
+            [plan_id],
+        )
+        matrix = {
+            (row["origin_zip"], row["dest_zip"]): row["travel_time_min"]
+            for row in api_rows(
+                con,
+                "SELECT origin_zip, dest_zip, travel_time_min FROM distance_matrix",
+            )
+        }
+
+    if not rows:
+        errors.append("Plan has no orders.")
+
+    driver_pairs: dict[str, set[str]] = {}
+    vehicle_pairs: dict[str, set[str]] = {}
+    for row in rows:
+        order_id = row["order_id"]
+        driver_id = row["driver_id"]
+        vehicle_id = row["vehicle_id"]
+        if not driver_id or not vehicle_id:
+            errors.append(f"{order_id}: driver and vehicle are required.")
+            continue
+        driver_pairs.setdefault(driver_id, set()).add(vehicle_id)
+        vehicle_pairs.setdefault(vehicle_id, set()).add(driver_id)
+        if row["driver_active"] is not True:
+            errors.append(f"{order_id}: driver {driver_id} is inactive or missing.")
+        if row["vehicle_active"] is not True:
+            errors.append(f"{order_id}: vehicle {vehicle_id} is inactive or missing.")
+        if row["req_driver_adr"] and not row["skill_adr"]:
+            errors.append(f"{order_id}: driver {driver_id} does not match ADR.")
+        if row["req_driver_ehbo"] and not row["skill_ehbo"]:
+            errors.append(f"{order_id}: driver {driver_id} does not match EHBO.")
+        if row["req_vehicle_liftgate"] and not row["spec_liftgate"]:
+            errors.append(f"{order_id}: vehicle {vehicle_id} does not match liftgate.")
+        if row["req_vehicle_refrigerated"] and not row["spec_refrigerated"]:
+            errors.append(
+                f"{order_id}: vehicle {vehicle_id} does not match refrigerated."
+            )
+        travel_time = matrix.get((row["driver_zip"], row["vehicle_zip"]))
+        if travel_time is None:
+            errors.append(
+                f"{order_id}: no distance matrix entry from driver {driver_id} "
+                f"to vehicle {vehicle_id}."
+            )
+        elif travel_time > 30:
+            errors.append(
+                f"{order_id}: driver {driver_id} is {travel_time} minutes "
+                f"from vehicle {vehicle_id}; maximum is 30."
+            )
+
+    for driver_id, vehicles in driver_pairs.items():
+        if len(vehicles) > 1:
+            errors.append(
+                f"Driver {driver_id} is assigned to multiple vehicles: "
+                f"{', '.join(sorted(vehicles))}."
+            )
+    for vehicle_id, drivers in vehicle_pairs.items():
+        if len(drivers) > 1:
+            errors.append(
+                f"Vehicle {vehicle_id} is assigned to multiple drivers: "
+                f"{', '.join(sorted(drivers))}."
+            )
+    return {"plan_id": plan_id, "valid": not errors, "errors": errors}
+
+
 def _group_plan_orders(
     assignments: list[dict[str, Any]], key: str
 ) -> dict[str, list[dict[str, Any]]]:
