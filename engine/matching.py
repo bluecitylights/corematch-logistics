@@ -13,6 +13,8 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime, timedelta
 
+MAX_DRIVER_VEHICLE_TRAVEL_MIN = 30
+
 
 def init_schema(con: duckdb.DuckDBPyConnection) -> None:
     """Apply schema.sql to an existing connection."""
@@ -43,7 +45,24 @@ def run_corematch_logistics(db_path: str = ":memory:") -> pd.DataFrame:
     drivers_df = con.execute("SELECT * FROM drivers").fetchdf()
     vehicles_df = con.execute("SELECT * FROM vehicles").fetchdf()
     orders_df = con.execute("SELECT * FROM orders").fetchdf()
-
+    resource_locations = {
+        row[0]: row[1]
+        for row in con.execute(
+            """
+            SELECT location_id, zip
+            FROM locations
+            """
+        ).fetchall()
+    }
+    travel_times = {
+        (row[0], row[1]): row[2]
+        for row in con.execute(
+            """
+            SELECT origin_zip, dest_zip, travel_time_min
+            FROM distance_matrix
+            """
+        ).fetchall()
+    }
     # ------------------------------------------------------------------ #
     # 2. Build BitMap indexes                                              #
     # ------------------------------------------------------------------ #
@@ -55,19 +74,27 @@ def run_corematch_logistics(db_path: str = ":memory:") -> pd.DataFrame:
         vehicles_df.loc[vehicles_df["is_active"] == True, "vehicle_index"].tolist()
     )
 
-    # Location indexes  (destination → set of driver/vehicle indexes at that location)
-    driver_locs: dict[int, BitMap] = {
-        loc: BitMap(
-            drivers_df.loc[drivers_df["location_id"] == loc, "driver_index"].tolist()
-        )
-        for loc in drivers_df["location_id"].dropna().unique()
+    # Precompute the location compatibility relation as driver-indexed
+    # vehicle bitmaps. This keeps location eligibility on the same fast bitmap
+    # path as skills and vehicle specifications.
+    vehicle_zips = {
+        row["vehicle_index"]: resource_locations.get(row["location_id"])
+        for _, row in vehicles_df.iterrows()
     }
-    vehicle_locs: dict[int, BitMap] = {
-        loc: BitMap(
-            vehicles_df.loc[vehicles_df["location_id"] == loc, "vehicle_index"].tolist()
-        )
-        for loc in vehicles_df["location_id"].dropna().unique()
+    allowed_vehicles_by_driver: dict[int, BitMap] = {}
+    allowed_drivers_by_vehicle: dict[int, BitMap] = {
+        vehicle_index: BitMap() for vehicle_index in vehicle_zips
     }
+    for _, driver in drivers_df.iterrows():
+        driver_zip = resource_locations.get(driver["location_id"])
+        driver_index = driver["driver_index"]
+        allowed_vehicles = BitMap()
+        for vehicle_index, vehicle_zip in vehicle_zips.items():
+            travel_time = travel_times.get((driver_zip, vehicle_zip))
+            if travel_time is not None and travel_time <= MAX_DRIVER_VEHICLE_TRAVEL_MIN:
+                allowed_vehicles.add(vehicle_index)
+                allowed_drivers_by_vehicle[vehicle_index].add(driver_index)
+        allowed_vehicles_by_driver[driver_index] = allowed_vehicles
 
     # Skill / spec feature indexes
     driver_features: dict[str, BitMap] = {
@@ -99,14 +126,8 @@ def run_corematch_logistics(db_path: str = ":memory:") -> pd.DataFrame:
     results: list[dict] = []
 
     for _, order in orders_df.iterrows():
-        dest = order.get("destination_location_id")
-
         # --- Driver candidate pool ---
-        if dest and dest in driver_locs:
-            # Restrict to drivers located at the order's destination
-            driver_pool = driver_locs[dest] & active_drivers
-        else:
-            driver_pool = active_drivers.copy()
+        driver_pool = active_drivers.copy()
 
         if order.get("req_driver_adr") is True:
             driver_pool &= driver_features["adr"]
@@ -117,10 +138,7 @@ def run_corematch_logistics(db_path: str = ":memory:") -> pd.DataFrame:
         available_drivers = driver_pool - assigned_drivers
 
         # --- Vehicle candidate pool ---
-        if dest and dest in vehicle_locs:
-            vehicle_pool = vehicle_locs[dest] & active_vehicles
-        else:
-            vehicle_pool = active_vehicles.copy()
+        vehicle_pool = active_vehicles.copy()
 
         if order.get("req_vehicle_liftgate") is True:
             vehicle_pool &= vehicle_features["liftgate"]
@@ -131,10 +149,24 @@ def run_corematch_logistics(db_path: str = ":memory:") -> pd.DataFrame:
         available_vehicles = vehicle_pool - assigned_vehicles
 
         # --- Atomic dual assignment ---
-        # Both must be available; otherwise the order is unfulfilled entirely.
-        if available_drivers and available_vehicles:
-            chosen_driver_idx = min(available_drivers)
-            chosen_vehicle_idx = min(available_vehicles)
+        # A driver may only be paired with a vehicle within 30 minutes.
+        chosen_driver_idx = None
+        chosen_vehicle_idx = None
+        compatible_drivers = BitMap()
+        for vehicle_idx in available_vehicles:
+            compatible_drivers |= allowed_drivers_by_vehicle.get(vehicle_idx, BitMap())
+
+        for driver_idx in available_drivers & compatible_drivers:
+            compatible_vehicles = (
+                available_vehicles
+                & allowed_vehicles_by_driver.get(driver_idx, BitMap())
+            )
+            if compatible_vehicles:
+                chosen_driver_idx = driver_idx
+                chosen_vehicle_idx = min(compatible_vehicles)
+                break
+
+        if chosen_driver_idx is not None and chosen_vehicle_idx is not None:
 
             # Commit to the assignment bitmaps
             assigned_drivers.add(chosen_driver_idx)
