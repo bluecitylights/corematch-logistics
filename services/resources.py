@@ -149,6 +149,30 @@ def get_plan(plan_id: str) -> dict[str, Any]:
             """,
             [plan_id],
         )
+    evaluations_by_order = {
+        item["order_id"]: item for item in evaluation
+    }
+    routes_by_key = {
+        (item["driver_id"], item["vehicle_id"]): item
+        for item in route_evaluation
+    }
+    route_groups = []
+    for key, route_orders in _group_plan_orders_by_pair(assignments).items():
+        driver_id, vehicle_id = key
+        route_groups.append(
+            {
+                "driver_id": driver_id,
+                "vehicle_id": vehicle_id,
+                "stops": [
+                    {
+                        **order,
+                        "evaluation": evaluations_by_order.get(order["order_id"]),
+                    }
+                    for order in route_orders
+                ],
+                "return": routes_by_key.get(key),
+            }
+        )
     return {
         **plans[0],
         "orders": assignments,
@@ -156,6 +180,7 @@ def get_plan(plan_id: str) -> dict[str, Any]:
         "orders_by_vehicle": _group_plan_orders(assignments, "vehicle_id"),
         "evaluation": evaluation,
         "route_evaluation": route_evaluation,
+        "route_groups": route_groups,
     }
 
 
@@ -167,6 +192,16 @@ def _group_plan_orders(
         resource_id = assignment[key]
         if resource_id is not None:
             grouped.setdefault(resource_id, []).append(assignment)
+    return grouped
+
+
+def _group_plan_orders_by_pair(
+    assignments: list[dict[str, Any]],
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for assignment in assignments:
+        key = (assignment["driver_id"], assignment["vehicle_id"])
+        grouped.setdefault(key, []).append(assignment)
     return grouped
 
 
