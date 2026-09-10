@@ -18,6 +18,7 @@ from services.resources import (
     list_plans,
     create_plan,
     get_plan,
+    generate_plan,
     list_resources,
     update_driver,
     update_vehicle,
@@ -96,6 +97,12 @@ async def add_plan(
     name: str = Form(...),
 ):
     create_plan({"plan_id": plan_id, "name": name})
+    return await plans_page(request)
+
+
+@router.post("/plans/{plan_id}/match", response_class=HTMLResponse)
+async def run_plan_match(plan_id: str, request: Request):
+    generate_plan(plan_id)
     return await plans_page(request)
 
 

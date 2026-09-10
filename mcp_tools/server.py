@@ -95,6 +95,51 @@ def delete_order(order_id: str) -> dict[str, Any]:
 
 
 @mcp.tool
+def list_plans() -> list[dict[str, Any]]:
+    """List plans through the CoreMatch REST API."""
+    return _request("GET", "/api/plans")
+
+
+@mcp.tool
+def create_plan(plan_id: str, name: str) -> dict[str, Any]:
+    """Create a plan through the CoreMatch REST API."""
+    return _request("POST", "/api/plans", {"plan_id": plan_id, "name": name})
+
+
+@mcp.tool
+def get_plan(plan_id: str) -> dict[str, Any]:
+    """Get a plan and its order lists grouped by driver and vehicle."""
+    return _request("GET", f"/api/plans/{plan_id}")
+
+
+@mcp.tool
+def add_order_to_plan(
+    plan_id: str,
+    order_id: str,
+    driver_id: str,
+    vehicle_id: str,
+    stop_sequence: int = 0,
+) -> dict[str, Any]:
+    """Add an order using the plan's single driver-vehicle combination."""
+    return _request(
+        "POST",
+        f"/api/plans/{plan_id}/orders",
+        {
+            "order_id": order_id,
+            "driver_id": driver_id,
+            "vehicle_id": vehicle_id,
+            "stop_sequence": stop_sequence,
+        },
+    )
+
+
+@mcp.tool
+def generate_plan(plan_id: str) -> dict[str, Any]:
+    """Run matching and generate a plan through the CoreMatch REST API."""
+    return _request("POST", f"/api/plans/{plan_id}/match")
+
+
+@mcp.tool
 def run_matching() -> list[dict[str, Any]]:
     """Run matching through the CoreMatch REST API."""
     return _request("POST", "/api/match")

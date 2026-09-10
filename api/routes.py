@@ -18,6 +18,7 @@ from services.resources import (
     list_locations,
     list_plans,
     get_plan,
+    generate_plan,
     list_resources,
     update_driver,
     update_order,
@@ -145,6 +146,11 @@ async def api_add_plan_order(plan_id: str, payload: dict = Body(...)):
     if "order_id" not in payload:
         raise HTTPException(400, "order_id is required")
     return add_plan_order(plan_id, payload)
+
+
+@router.post("/plans/{plan_id}/match")
+async def api_generate_plan(plan_id: str):
+    return generate_plan(plan_id)
 
 
 @router.patch("/orders/{order_id}")
