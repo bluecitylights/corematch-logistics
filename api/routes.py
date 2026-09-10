@@ -1,5 +1,7 @@
 """REST API routes for CoreMatch resources."""
 
+import json
+
 from fastapi import APIRouter, Body, HTTPException
 
 from db import DB_PATH, api_rows, api_update, get_db
@@ -112,4 +114,5 @@ async def api_delete_order(order_id: str):
 
 @router.post("/match")
 async def api_match():
-    return run_corematch_logistics(DB_PATH).to_dict(orient="records")
+    results = run_corematch_logistics(DB_PATH)
+    return json.loads(results.to_json(orient="records"))
