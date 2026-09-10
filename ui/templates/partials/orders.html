@@ -12,7 +12,9 @@
   <tbody class="divide-y divide-gray-100">
     {% for o in orders %}
     <tr class="hover:bg-gray-50">
-      <td class="px-4 py-2 font-mono font-semibold">{{ o[0] }}</td>
+      <td class="px-4 py-2 font-mono font-semibold"><a class="text-indigo-600 hover:underline"
+        href="/orders/{{ o[0] }}/edit" hx-get="/orders/{{ o[0] }}/edit"
+        hx-target="#side-panel-content" hx-swap="innerHTML">{{ o[0] }}</a></td>
       <td class="px-4 py-2">{{ o[6] }}</td>
       <td class="px-4 py-2 text-center">{{ '✓' if o[2] else '–' }}</td>
       <td class="px-4 py-2 text-center">{{ '✓' if o[3] else '–' }}</td>

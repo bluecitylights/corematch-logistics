@@ -18,11 +18,13 @@ from services.resources import (
     list_plans,
     create_plan,
     get_plan,
+    add_plan_order,
     generate_plan,
     evaluate_plan,
     list_resources,
     update_driver,
     update_vehicle,
+    update_order,
 )
 
 
@@ -40,6 +42,111 @@ def _is_htmx(request: Request) -> bool:
 
 def _tmpl(request: Request, name: str, ctx: dict):
     return templates.TemplateResponse(request, name, ctx)
+
+
+def _resource_edit_context(resource_type: str, resource_id: str) -> dict:
+    if resource_type == "driver":
+        resource = next(
+            (item for item in list_resources("drivers", include_inactive=True)
+             if item["driver_id"] == resource_id),
+            None,
+        )
+    elif resource_type == "vehicle":
+        resource = next(
+            (item for item in list_resources("vehicles", include_inactive=True)
+             if item["vehicle_id"] == resource_id),
+            None,
+        )
+    else:
+        resource = next(
+            (item for item in list_orders() if item["order_id"] == resource_id),
+            None,
+        )
+    if resource is None:
+        from fastapi import HTTPException
+        raise HTTPException(404, f"{resource_type.title()} not found: {resource_id}")
+    locations = _locations_context()
+    return {
+        "resource_type": resource_type,
+        "resource_path": {
+            "driver": "drivers",
+            "vehicle": "vehicles",
+            "order": "orders",
+        }[resource_type],
+        "resource_id": resource_id,
+        "resource": resource,
+        "locations": locations,
+        "location_label": next(
+            (location["address"] for location in locations
+             if location["location_id"] == resource.get("location_id",
+                                                        resource.get("destination_location_id"))),
+            "Unknown",
+        ),
+    }
+
+
+@router.get("/{resource_type}/{resource_id}/edit", response_class=HTMLResponse)
+async def edit_resource_page(
+    resource_type: str, resource_id: str, request: Request
+):
+    if resource_type not in {"drivers", "vehicles", "orders"}:
+        from fastapi import HTTPException
+        raise HTTPException(404, "Unknown resource type")
+    singular = resource_type[:-1]
+    context = _resource_edit_context(singular, resource_id)
+    return _tmpl(
+        request,
+        "partials/resource_edit_panel.html" if _is_htmx(request) else "resource_edit.html",
+        context,
+    )
+
+
+@router.post("/{resource_type}/{resource_id}/edit", response_class=HTMLResponse)
+async def update_resource_page(
+    resource_type: str, resource_id: str, request: Request
+):
+    form = await request.form()
+    if resource_type == "drivers":
+        update_driver(
+            resource_id,
+            {
+                "location_id": int(form["location_id"]),
+                "skill_adr": _bool(form.get("skill_adr")),
+                "skill_ehbo": _bool(form.get("skill_ehbo")),
+                "is_active": _bool(form.get("is_active")),
+            },
+        )
+    elif resource_type == "vehicles":
+        update_vehicle(
+            resource_id,
+            {
+                "license_plate": form["license_plate"],
+                "location_id": int(form["location_id"]),
+                "spec_liftgate": _bool(form.get("spec_liftgate")),
+                "spec_refrigerated": _bool(form.get("spec_refrigerated")),
+                "is_active": _bool(form.get("is_active")),
+            },
+        )
+    elif resource_type == "orders":
+        update_order(
+            resource_id,
+            {
+                "destination_location_id": int(form["destination_location_id"]),
+                "req_driver_adr": _bool(form.get("req_driver_adr")),
+                "req_driver_ehbo": _bool(form.get("req_driver_ehbo")),
+                "req_vehicle_liftgate": _bool(form.get("req_vehicle_liftgate")),
+                "req_vehicle_refrigerated": _bool(form.get("req_vehicle_refrigerated")),
+            },
+        )
+    else:
+        from fastapi import HTTPException
+        raise HTTPException(404, "Unknown resource type")
+    context = _resource_edit_context(resource_type[:-1], resource_id)
+    return _tmpl(
+        request,
+        "partials/resource_edit_panel.html" if _is_htmx(request) else "resource_edit.html",
+        context,
+    )
 
 
 def _location_label(location: dict) -> str:
@@ -88,7 +195,62 @@ async def locations_page(request: Request):
 @router.get("/plans", response_class=HTMLResponse)
 async def plans_page(request: Request):
     plans = [get_plan(plan["plan_id"]) for plan in list_plans()]
-    return _tmpl(request, "plans.html", {"plans": plans})
+    locations = {
+        location["location_id"]: location["address"]
+        for location in _locations_context()
+    }
+    drivers = [
+        {
+            **driver,
+            "location_label": locations.get(driver["location_id"], "Unknown"),
+        }
+        for driver in list_resources("drivers")
+    ]
+    vehicles = [
+        {
+            **vehicle,
+            "location_label": locations.get(vehicle["location_id"], "Unknown"),
+        }
+        for vehicle in list_resources("vehicles")
+    ]
+    orders = list_orders()
+    with get_db() as con:
+        order_locations = {
+            row["location_id"]: f'{row["zip"]} {row["city"]}'
+            for row in con.execute(
+                """
+                SELECT location_id, zip, city
+                FROM locations
+                """
+            ).fetchdf().to_dict(orient="records")
+        }
+    orders = [
+        {
+            **order,
+            "destination_label": order_locations.get(
+                order["destination_location_id"], "Unknown"
+            ),
+        }
+        for order in orders
+    ]
+    for plan in plans:
+        assigned_order_ids = {
+            order["order_id"] for order in plan["orders"]
+        }
+        plan["available_orders"] = [
+            order for order in orders
+            if order["order_id"] not in assigned_order_ids
+        ]
+    return _tmpl(
+        request,
+        "plans.html",
+        {
+            "plans": plans,
+            "drivers": drivers,
+            "vehicles": vehicles,
+            "orders": orders,
+        },
+    )
 
 
 @router.post("/plans", response_class=HTMLResponse)
@@ -110,6 +272,25 @@ async def run_plan_match(plan_id: str, request: Request):
 @router.post("/plans/{plan_id}/evaluate", response_class=HTMLResponse)
 async def evaluate_plan_page(plan_id: str, request: Request):
     evaluate_plan(plan_id)
+    return await plans_page(request)
+
+
+@router.post("/plans/{plan_id}/orders", response_class=HTMLResponse)
+async def add_plan_order_page(
+    plan_id: str,
+    request: Request,
+    driver_id: str = Form(...),
+    vehicle_id: str = Form(...),
+    order_id: str = Form(...),
+):
+    add_plan_order(
+        plan_id,
+        {
+            "driver_id": driver_id,
+            "vehicle_id": vehicle_id,
+            "order_id": order_id,
+        },
+    )
     return await plans_page(request)
 
 

@@ -21,12 +21,60 @@
           Compute plan
         </button>
       </form>
+      <form method="post" action="/plans/{{ plan.plan_id }}/orders"
+        class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2 border-t pt-4">
+        <select name="driver_id" required class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+          <option value="">Add driver</option>
+          {% for driver in drivers %}
+          <option value="{{ driver.driver_id }}">{{ driver.driver_id }} — {{ driver.location_label }}</option>
+          {% endfor %}
+        </select>
+        <select name="vehicle_id" required class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+          <option value="">Add vehicle</option>
+          {% for vehicle in vehicles %}
+          <option value="{{ vehicle.vehicle_id }}">{{ vehicle.vehicle_id }} — {{ vehicle.location_label }}</option>
+          {% endfor %}
+        </select>
+        <div class="flex gap-2">
+          <select name="order_id" required class="min-w-0 flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">First order</option>
+            {% for order in plan.available_orders %}
+            <option value="{{ order.order_id }}">{{ order.order_id }} — {{ order.destination_label }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit"
+            class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg text-sm whitespace-nowrap">
+            Add combination
+          </button>
+        </div>
+      </form>
       {% for route in plan.route_groups %}
       <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
         <div class="bg-gray-100 px-3 py-2 text-sm font-semibold">
-          Driver <span class="font-mono">{{ route.driver_id }}</span>
-          · Vehicle <span class="font-mono">{{ route.vehicle_id }}</span>
+          Driver <a class="font-mono text-indigo-600 hover:underline"
+            href="/drivers/{{ route.driver_id }}/edit"
+            hx-get="/drivers/{{ route.driver_id }}/edit"
+            hx-target="#side-panel-content" hx-swap="innerHTML">{{ route.driver_id }}</a>
+          · Vehicle <a class="font-mono text-indigo-600 hover:underline"
+            href="/vehicles/{{ route.vehicle_id }}/edit"
+            hx-get="/vehicles/{{ route.vehicle_id }}/edit"
+            hx-target="#side-panel-content" hx-swap="innerHTML">{{ route.vehicle_id }}</a>
         </div>
+        <form method="post" action="/plans/{{ plan.plan_id }}/orders"
+          class="px-3 py-3 bg-gray-50 flex gap-2">
+          <input type="hidden" name="driver_id" value="{{ route.driver_id }}" />
+          <input type="hidden" name="vehicle_id" value="{{ route.vehicle_id }}" />
+          <select name="order_id" required class="min-w-0 flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">Add order to this combination</option>
+            {% for order in plan.available_orders %}
+            <option value="{{ order.order_id }}">{{ order.order_id }} — {{ order.destination_label }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit"
+            class="bg-slate-600 hover:bg-slate-700 text-white font-semibold px-3 py-2 rounded-lg text-sm">
+            Add order
+          </button>
+        </form>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
@@ -43,7 +91,10 @@
               {% set evaluated = stop.evaluation %}
               <tr>
                 <td class="px-3 py-2">{{ stop.stop_sequence }}</td>
-                <td class="px-3 py-2 font-mono">{{ stop.order_id }}</td>
+                <td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline"
+                  href="/orders/{{ stop.order_id }}/edit"
+                  hx-get="/orders/{{ stop.order_id }}/edit"
+                  hx-target="#side-panel-content" hx-swap="innerHTML">{{ stop.order_id }}</a></td>
                 <td class="px-3 py-2">{{ evaluated.driving_time_min if evaluated else '–' }}</td>
                 <td class="px-3 py-2">{{ evaluated.departure_time if evaluated else '–' }}</td>
                 <td class="px-3 py-2">{{ evaluated.arrival_time if evaluated else '–' }}</td>
