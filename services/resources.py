@@ -397,48 +397,45 @@ def move_plan_order(
     if direction not in (-1, 1):
         raise HTTPException(400, "Direction must be -1 or 1")
     with get_db() as con:
-        current = api_rows(
+        route_orders = api_rows(
             con,
             """
-            SELECT stop_sequence FROM plan_orders
-            WHERE plan_id = ? AND driver_id = ? AND vehicle_id = ? AND order_id = ?
-            """,
-            [plan_id, driver_id, vehicle_id, order_id],
-        )
-        if not current:
-            raise HTTPException(404, "Plan order not found")
-        current_sequence = current[0]["stop_sequence"]
-        neighbor = api_rows(
-            con,
-            """
-            SELECT order_id, stop_sequence FROM plan_orders
+            SELECT order_id, stop_sequence
+            FROM plan_orders
             WHERE plan_id = ? AND driver_id = ? AND vehicle_id = ?
-              AND stop_sequence = ?
+            ORDER BY stop_sequence, order_id
             """,
-            [plan_id, driver_id, vehicle_id, current_sequence + direction],
+            [plan_id, driver_id, vehicle_id],
         )
-        if neighbor:
-            neighbor_order = neighbor[0]["order_id"]
+        order_ids = [row["order_id"] for row in route_orders]
+        if order_id not in order_ids:
+            raise HTTPException(404, "Plan order not found")
+        current_index = order_ids.index(order_id)
+        neighbor_index = current_index + direction
+        if 0 <= neighbor_index < len(order_ids):
+            reordered = order_ids.copy()
+            reordered[current_index], reordered[neighbor_index] = (
+                reordered[neighbor_index],
+                reordered[current_index],
+            )
             con.execute(
                 """
                 UPDATE plan_orders
-                SET stop_sequence = CASE
-                    WHEN order_id = ? THEN ?
-                    WHEN order_id = ? THEN ?
-                END
+                SET stop_sequence = 1000000 + stop_sequence
                 WHERE plan_id = ? AND driver_id = ? AND vehicle_id = ?
-                  AND order_id IN (?, ?)
+                """,
+                [plan_id, driver_id, vehicle_id],
+            )
+            con.executemany(
+                """
+                UPDATE plan_orders
+                SET stop_sequence = ?
+                WHERE plan_id = ? AND driver_id = ? AND vehicle_id = ?
+                  AND order_id = ?
                 """,
                 [
-                    order_id,
-                    current_sequence + direction,
-                    neighbor_order,
-                    current_sequence,
-                    plan_id,
-                    driver_id,
-                    vehicle_id,
-                    order_id,
-                    neighbor_order,
+                    (sequence, plan_id, driver_id, vehicle_id, moved_order_id)
+                    for sequence, moved_order_id in enumerate(reordered, start=1)
                 ],
             )
         con.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
