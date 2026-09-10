@@ -14,7 +14,7 @@ import duckdb
 import pytest
 from pyroaring import BitMap
 
-from engine import init_schema, run_corematch_logistics
+from engine import evaluate_plan_routes, init_schema, run_corematch_logistics
 
 
 # ------------------------------------------------------------------ #
@@ -307,3 +307,72 @@ class TestAtomicIntegrity:
             assert bad["status"]  != "Fully Matched"
         finally:
             os.unlink(db)
+
+
+class TestPlanRouteEvaluation:
+    def test_multiple_orders_use_actual_matrix_travel_times(self):
+        """A route uses each matrix leg, including the return to its start."""
+        rows = [
+            {
+                "plan_id": "PLAN-1",
+                "order_id": "ORD-1",
+                "driver_id": "DRV-1",
+                "vehicle_id": "VEH-1",
+                "stop_sequence": 1,
+                "start_zip": "1012",
+                "destination_zip": "3011",
+            },
+            {
+                "plan_id": "PLAN-1",
+                "order_id": "ORD-2",
+                "driver_id": "DRV-1",
+                "vehicle_id": "VEH-1",
+                "stop_sequence": 2,
+                "start_zip": "1012",
+                "destination_zip": "3511",
+            },
+        ]
+        travel_times = {
+            ("1012", "3011"): 48,
+            ("3011", "3511"): 38,
+            ("3511", "1012"): 42,
+        }
+
+        result = evaluate_plan_routes(rows, travel_times)
+
+        assert result["stops"] == [
+            {
+                "order_id": "ORD-1",
+                "driver_id": "DRV-1",
+                "vehicle_id": "VEH-1",
+                "stop_sequence": 1,
+                "origin_zip": "1012",
+                "destination_zip": "3011",
+                "driving_time_min": 48,
+                "departure_time": "09:00",
+                "arrival_time": "09:48",
+            },
+            {
+                "order_id": "ORD-2",
+                "driver_id": "DRV-1",
+                "vehicle_id": "VEH-1",
+                "stop_sequence": 2,
+                "origin_zip": "3011",
+                "destination_zip": "3511",
+                "driving_time_min": 38,
+                "departure_time": "09:48",
+                "arrival_time": "10:26",
+            },
+        ]
+        assert result["routes"] == [
+            {
+                "plan_id": "PLAN-1",
+                "driver_id": "DRV-1",
+                "vehicle_id": "VEH-1",
+                "start_zip": "1012",
+                "last_stop_zip": "3511",
+                "return_driving_time_min": 42,
+                "return_departure_time": "10:26",
+                "return_arrival_time": "11:08",
+            }
+        ]
