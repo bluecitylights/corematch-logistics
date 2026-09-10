@@ -140,6 +140,12 @@ def generate_plan(plan_id: str) -> dict[str, Any]:
 
 
 @mcp.tool
+def evaluate_plan(plan_id: str) -> dict[str, Any]:
+    """Calculate driving and absolute times for a generated plan."""
+    return _request("POST", f"/api/plans/{plan_id}/evaluate")
+
+
+@mcp.tool
 def run_matching() -> list[dict[str, Any]]:
     """Run matching through the CoreMatch REST API."""
     return _request("POST", "/api/match")

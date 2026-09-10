@@ -15,30 +15,57 @@
           Run match and generate plan
         </button>
       </form>
-      <div class="overflow-x-auto mt-4">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="bg-gray-100 text-left text-gray-600 uppercase text-xs">
-              <th class="px-3 py-2">Stop</th>
-              <th class="px-3 py-2">Order</th>
-              <th class="px-3 py-2">Driver</th>
-              <th class="px-3 py-2">Vehicle</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            {% for order in plan.orders %}
-            <tr>
-              <td class="px-3 py-2">{{ order.stop_sequence }}</td>
-              <td class="px-3 py-2 font-mono">{{ order.order_id }}</td>
-              <td class="px-3 py-2 font-mono">{{ order.driver_id }}</td>
-              <td class="px-3 py-2 font-mono">{{ order.vehicle_id }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="4" class="px-3 py-4 text-gray-400">No generated orders.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <form method="post" action="/plans/{{ plan.plan_id }}/evaluate" class="mt-2">
+        <button type="submit"
+          class="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-lg text-sm">
+          Compute plan
+        </button>
+      </form>
+      {% for route in plan.route_groups %}
+      <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+        <div class="bg-gray-100 px-3 py-2 text-sm font-semibold">
+          Driver <span class="font-mono">{{ route.driver_id }}</span>
+          · Vehicle <span class="font-mono">{{ route.vehicle_id }}</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-gray-600 uppercase text-xs">
+                <th class="px-3 py-2">Stop</th>
+                <th class="px-3 py-2">Order</th>
+                <th class="px-3 py-2">Drive (min)</th>
+                <th class="px-3 py-2">Departure</th>
+                <th class="px-3 py-2">Arrival</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              {% for stop in route.stops %}
+              {% set evaluated = stop.evaluation %}
+              <tr>
+                <td class="px-3 py-2">{{ stop.stop_sequence }}</td>
+                <td class="px-3 py-2 font-mono">{{ stop.order_id }}</td>
+                <td class="px-3 py-2">{{ evaluated.driving_time_min if evaluated else '–' }}</td>
+                <td class="px-3 py-2">{{ evaluated.departure_time if evaluated else '–' }}</td>
+                <td class="px-3 py-2">{{ evaluated.arrival_time if evaluated else '–' }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="px-3 py-4 text-gray-400">No stops.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if route.return %}
+        <div class="px-3 py-2 text-sm text-gray-600 border-t border-gray-200">
+          Return {{ route.return.last_stop_zip }} → {{ route.return.start_zip }}:
+          {{ route.return.return_driving_time_min }} min,
+          depart {{ route.return.return_departure_time }},
+          arrive {{ route.return.return_arrival_time }}
+        </div>
+        {% endif %}
       </div>
+      {% else %}
+      <p class="mt-4 text-sm text-gray-400">No generated orders.</p>
+      {% endfor %}
     </section>
     {% else %}
     <p class="text-gray-400">No plans yet.</p>

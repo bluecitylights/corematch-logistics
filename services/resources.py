@@ -1,12 +1,11 @@
 """Shared resource operations used by the REST and HTML interfaces."""
 
 from typing import Any
-
 from fastapi import HTTPException
 
 from db import api_rows, api_update, get_db
 from db.locations import rebuild_distance_matrix
-from engine import run_corematch_logistics
+from engine import evaluate_plan_routes, run_corematch_logistics
 from db import DB_PATH
 
 
@@ -126,11 +125,62 @@ def get_plan(plan_id: str) -> dict[str, Any]:
             """,
             [plan_id],
         )
+        evaluation = api_rows(
+            con,
+            """
+            SELECT plan_id, order_id, driver_id, vehicle_id, stop_sequence,
+                   origin_zip, destination_zip, driving_time_min,
+                   departure_time, arrival_time
+            FROM plan_evaluations
+            WHERE plan_id = ?
+            ORDER BY stop_sequence, order_id
+            """,
+            [plan_id],
+        )
+        route_evaluation = api_rows(
+            con,
+            """
+            SELECT plan_id, driver_id, vehicle_id, start_zip, last_stop_zip,
+                   return_driving_time_min, return_departure_time,
+                   return_arrival_time
+            FROM plan_route_evaluations
+            WHERE plan_id = ?
+            ORDER BY driver_id, vehicle_id
+            """,
+            [plan_id],
+        )
+    evaluations_by_order = {
+        item["order_id"]: item for item in evaluation
+    }
+    routes_by_key = {
+        (item["driver_id"], item["vehicle_id"]): item
+        for item in route_evaluation
+    }
+    route_groups = []
+    for key, route_orders in _group_plan_orders_by_pair(assignments).items():
+        driver_id, vehicle_id = key
+        route_groups.append(
+            {
+                "driver_id": driver_id,
+                "vehicle_id": vehicle_id,
+                "stops": [
+                    {
+                        **order,
+                        "evaluation": evaluations_by_order.get(order["order_id"]),
+                    }
+                    for order in route_orders
+                ],
+                "return": routes_by_key.get(key),
+            }
+        )
     return {
         **plans[0],
         "orders": assignments,
         "orders_by_driver": _group_plan_orders(assignments, "driver_id"),
         "orders_by_vehicle": _group_plan_orders(assignments, "vehicle_id"),
+        "evaluation": evaluation,
+        "route_evaluation": route_evaluation,
+        "route_groups": route_groups,
     }
 
 
@@ -142,6 +192,16 @@ def _group_plan_orders(
         resource_id = assignment[key]
         if resource_id is not None:
             grouped.setdefault(resource_id, []).append(assignment)
+    return grouped
+
+
+def _group_plan_orders_by_pair(
+    assignments: list[dict[str, Any]],
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for assignment in assignments:
+        key = (assignment["driver_id"], assignment["vehicle_id"])
+        grouped.setdefault(key, []).append(assignment)
     return grouped
 
 
@@ -220,3 +280,88 @@ def generate_plan(plan_id: str) -> dict[str, Any]:
             ],
         )
     return get_plan(plan["plan_id"])
+
+
+def evaluate_plan(plan_id: str) -> dict[str, Any]:
+    plan = get_plan(plan_id)
+    with get_db() as con:
+        rows = api_rows(
+            con,
+            """
+            SELECT po.order_id, po.driver_id, po.vehicle_id, po.stop_sequence,
+                   o.destination_location_id, destination.zip AS destination_zip,
+                   start_location.zip AS start_zip
+            FROM plan_orders po
+            JOIN orders o ON o.order_id = po.order_id
+            JOIN locations destination
+              ON destination.location_id = o.destination_location_id
+            JOIN drivers d ON d.driver_id = po.driver_id
+            JOIN locations start_location
+              ON start_location.location_id = d.location_id
+            WHERE po.plan_id = ?
+            ORDER BY po.driver_id, po.vehicle_id, po.stop_sequence, po.order_id
+            """,
+            [plan_id],
+        )
+        matrix = {
+            (row["origin_zip"], row["dest_zip"]): row["travel_time_min"]
+            for row in api_rows(
+                con,
+                "SELECT origin_zip, dest_zip, travel_time_min FROM distance_matrix",
+            )
+        }
+
+    try:
+        evaluated = evaluate_plan_routes(rows, matrix)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    with get_db() as con:
+        con.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
+        con.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
+        con.executemany(
+            """
+            INSERT INTO plan_evaluations
+                (plan_id, order_id, driver_id, vehicle_id, stop_sequence,
+                 origin_zip, destination_zip, driving_time_min,
+                 departure_time, arrival_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    plan_id,
+                    item["order_id"],
+                    item["driver_id"],
+                    item["vehicle_id"],
+                    item["stop_sequence"],
+                    item["origin_zip"],
+                    item["destination_zip"],
+                    item["driving_time_min"],
+                    item["departure_time"],
+                    item["arrival_time"],
+                )
+                for item in evaluated["stops"]
+            ],
+        )
+        con.executemany(
+            """
+            INSERT INTO plan_route_evaluations
+                (plan_id, driver_id, vehicle_id, start_zip, last_stop_zip,
+                 return_driving_time_min, return_departure_time,
+                 return_arrival_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    plan_id,
+                    item["driver_id"],
+                    item["vehicle_id"],
+                    item["start_zip"],
+                    item["last_stop_zip"],
+                    item["return_driving_time_min"],
+                    item["return_departure_time"],
+                    item["return_arrival_time"],
+                )
+                for item in evaluated["routes"]
+            ],
+        )
+    return get_plan(plan_id)
