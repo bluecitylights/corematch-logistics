@@ -15,6 +15,12 @@
           Run match and generate plan
         </button>
       </form>
+      <form method="post" action="/plans/{{ plan.plan_id }}/evaluate" class="mt-2">
+        <button type="submit"
+          class="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-lg text-sm">
+          Compute plan
+        </button>
+      </form>
       <div class="overflow-x-auto mt-4">
         <table class="w-full text-sm">
           <thead>
@@ -23,6 +29,9 @@
               <th class="px-3 py-2">Order</th>
               <th class="px-3 py-2">Driver</th>
               <th class="px-3 py-2">Vehicle</th>
+              <th class="px-3 py-2">Drive (min)</th>
+              <th class="px-3 py-2">Departure</th>
+              <th class="px-3 py-2">Arrival</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
@@ -32,9 +41,13 @@
               <td class="px-3 py-2 font-mono">{{ order.order_id }}</td>
               <td class="px-3 py-2 font-mono">{{ order.driver_id }}</td>
               <td class="px-3 py-2 font-mono">{{ order.vehicle_id }}</td>
+              {% set evaluated = (plan.evaluation | selectattr('order_id', 'equalto', order.order_id) | list | first) if plan.evaluation is defined else none %}
+              <td class="px-3 py-2">{{ evaluated.driving_time_min if evaluated else '–' }}</td>
+              <td class="px-3 py-2">{{ evaluated.departure_time if evaluated else '–' }}</td>
+              <td class="px-3 py-2">{{ evaluated.arrival_time if evaluated else '–' }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="4" class="px-3 py-4 text-gray-400">No generated orders.</td></tr>
+            <tr><td colspan="7" class="px-3 py-4 text-gray-400">No generated orders.</td></tr>
             {% endfor %}
           </tbody>
         </table>

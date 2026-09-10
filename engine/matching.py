@@ -11,6 +11,7 @@ import duckdb
 from pyroaring import BitMap
 import pandas as pd
 from pathlib import Path
+from datetime import datetime, timedelta
 
 
 def init_schema(con: duckdb.DuckDBPyConnection) -> None:
@@ -167,6 +168,43 @@ def run_corematch_logistics(db_path: str = ":memory:") -> pd.DataFrame:
 
     con.close()
     return pd.DataFrame(results)
+
+
+def evaluate_plan_routes(
+    rows: list[dict],
+    travel_times: dict[tuple[str, str], int],
+    start_hour: int = 9,
+) -> list[dict]:
+    """Calculate route driving and absolute times from a 09:00 start."""
+    route_clocks: dict[tuple[str, str], datetime] = {}
+    route_locations: dict[tuple[str, str], str] = {}
+    evaluated = []
+    for row in rows:
+        route = (row["driver_id"], row["vehicle_id"])
+        departure = route_clocks.get(route, datetime(2000, 1, 1, start_hour))
+        origin_zip = route_locations.get(route, row["start_zip"])
+        driving_time = travel_times.get((origin_zip, row["destination_zip"]))
+        if driving_time is None:
+            raise ValueError(
+                f"No distance matrix entry from {origin_zip} to {row['destination_zip']}"
+            )
+        arrival = departure + timedelta(minutes=driving_time)
+        evaluated.append(
+            {
+                "order_id": row["order_id"],
+                "driver_id": row["driver_id"],
+                "vehicle_id": row["vehicle_id"],
+                "stop_sequence": row["stop_sequence"],
+                "origin_zip": origin_zip,
+                "destination_zip": row["destination_zip"],
+                "driving_time_min": driving_time,
+                "departure_time": departure.strftime("%H:%M"),
+                "arrival_time": arrival.strftime("%H:%M"),
+            }
+        )
+        route_clocks[route] = arrival
+        route_locations[route] = row["destination_zip"]
+    return evaluated
 
 
 # --------------------------------------------------------------------------- #

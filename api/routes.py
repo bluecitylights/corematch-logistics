@@ -19,6 +19,7 @@ from services.resources import (
     list_plans,
     get_plan,
     generate_plan,
+    evaluate_plan,
     list_resources,
     update_driver,
     update_order,
@@ -151,6 +152,11 @@ async def api_add_plan_order(plan_id: str, payload: dict = Body(...)):
 @router.post("/plans/{plan_id}/match")
 async def api_generate_plan(plan_id: str):
     return generate_plan(plan_id)
+
+
+@router.post("/plans/{plan_id}/evaluate")
+async def api_evaluate_plan(plan_id: str):
+    return evaluate_plan(plan_id)
 
 
 @router.patch("/orders/{order_id}")
