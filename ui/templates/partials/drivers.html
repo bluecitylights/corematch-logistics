@@ -13,7 +13,7 @@
     {% for d in drivers %}
     <tr class="hover:bg-gray-50 {% if not d[2] %}opacity-40{% endif %}">
       <td class="px-4 py-2 font-mono font-semibold">{{ d[0] }}</td>
-      <td class="px-4 py-2">{{ d[1] }}</td>
+      <td class="px-4 py-2">{{ d[5] }}</td>
       <td class="px-4 py-2 text-center">{{ '✓' if d[3] else '–' }}</td>
       <td class="px-4 py-2 text-center">{{ '✓' if d[4] else '–' }}</td>
       <td class="px-4 py-2 text-center">

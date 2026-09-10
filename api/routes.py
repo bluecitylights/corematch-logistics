@@ -9,9 +9,11 @@ from engine import run_corematch_logistics
 from services.resources import (
     create_driver,
     create_order,
+    create_location,
     create_vehicle,
     delete_order,
     list_orders,
+    list_locations,
     list_resources,
     update_driver,
     update_order,
@@ -79,8 +81,15 @@ async def api_orders():
 
 @router.get("/locations")
 async def api_locations():
-    with get_db() as con:
-        return api_rows(con, "SELECT * FROM locations ORDER BY zip")
+    return list_locations()
+
+
+@router.post("/locations")
+async def api_create_location(payload: dict = Body(...)):
+    required = ("zip", "city", "latitude", "longitude")
+    if any(field not in payload for field in required):
+        raise HTTPException(400, "zip, city, latitude, and longitude are required")
+    return create_location(payload)
 
 
 @router.get("/distance-matrix/{origin_zip}")

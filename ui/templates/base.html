@@ -11,6 +11,13 @@
     .htmx-request .htmx-indicator { opacity: 1; }
     .htmx-request.htmx-indicator { opacity: 1; }
   </style>
+  <script>
+    function setLocationId(input) {
+      const option = Array.from(document.getElementById(input.getAttribute("list")).options)
+        .find(item => item.value === input.value);
+      input.form.elements[input.dataset.locationField].value = option?.dataset.locationId || "";
+    }
+  </script>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen">
 
@@ -21,6 +28,7 @@
       <a href="/drivers"  class="hover:text-indigo-200 transition-colors">Drivers</a>
       <a href="/vehicles" class="hover:text-indigo-200 transition-colors">Vehicles</a>
       <a href="/orders"   class="hover:text-indigo-200 transition-colors">Orders</a>
+      <a href="/locations" class="hover:text-indigo-200 transition-colors">Locations</a>
     </div>
   </nav>
 
