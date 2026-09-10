@@ -22,6 +22,8 @@ from services.resources import (
     generate_plan,
     evaluate_plan,
     validate_plan,
+    switch_plan_route,
+    move_plan_order,
     list_resources,
     update_driver,
     update_vehicle,
@@ -280,6 +282,34 @@ async def evaluate_plan_page(plan_id: str, request: Request):
 @router.post("/plans/{plan_id}/validate", response_class=HTMLResponse)
 async def validate_plan_page(plan_id: str, request: Request):
     return await plans_page(request, validate_plan(plan_id))
+
+
+@router.post("/plans/{plan_id}/routes", response_class=HTMLResponse)
+async def switch_plan_route_page(
+    plan_id: str,
+    request: Request,
+    current_driver_id: str = Form(...),
+    current_vehicle_id: str = Form(...),
+    driver_id: str = Form(...),
+    vehicle_id: str = Form(...),
+):
+    switch_plan_route(
+        plan_id, current_driver_id, current_vehicle_id, driver_id, vehicle_id
+    )
+    return await plans_page(request)
+
+
+@router.post("/plans/{plan_id}/orders/{order_id}/move", response_class=HTMLResponse)
+async def move_plan_order_page(
+    plan_id: str,
+    order_id: str,
+    request: Request,
+    driver_id: str = Form(...),
+    vehicle_id: str = Form(...),
+    direction: int = Form(...),
+):
+    move_plan_order(plan_id, driver_id, vehicle_id, order_id, direction)
+    return await plans_page(request)
 
 
 @router.post("/plans/{plan_id}/orders", response_class=HTMLResponse)
