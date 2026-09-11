@@ -57,7 +57,7 @@ async def home_page(request: Request):
         order_count = con.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
     return _tmpl(
         request,
-        "home.html",
+        "index.html",
         {
             "driver_count": driver_count,
             "vehicle_count": vehicle_count,
