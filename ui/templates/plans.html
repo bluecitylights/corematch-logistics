@@ -79,6 +79,22 @@
             hx-get="/vehicles/{{ route.vehicle_id }}/edit"
             hx-target="#side-panel-content" hx-swap="innerHTML">{{ route.vehicle_id }}</a>
         </div>
+        <form method="post" action="/plans/{{ plan.plan_id }}/routes"
+          class="px-3 py-2 bg-gray-50 flex gap-2">
+          <input type="hidden" name="current_driver_id" value="{{ route.driver_id }}" />
+          <input type="hidden" name="current_vehicle_id" value="{{ route.vehicle_id }}" />
+          <select name="driver_id" required class="min-w-0 flex-1 border rounded-lg px-2 py-1 text-sm">
+            {% for driver in drivers %}
+            <option value="{{ driver.driver_id }}" {% if driver.driver_id == route.driver_id %}selected{% endif %}>{{ driver.driver_id }}</option>
+            {% endfor %}
+          </select>
+          <select name="vehicle_id" required class="min-w-0 flex-1 border rounded-lg px-2 py-1 text-sm">
+            {% for vehicle in vehicles %}
+            <option value="{{ vehicle.vehicle_id }}" {% if vehicle.vehicle_id == route.vehicle_id %}selected{% endif %}>{{ vehicle.vehicle_id }}</option>
+            {% endfor %}
+          </select>
+          <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-lg text-sm">Switch</button>
+        </form>
         <form method="post" action="/plans/{{ plan.plan_id }}/orders"
           class="px-3 py-3 bg-gray-50 flex gap-2">
           <input type="hidden" name="driver_id" value="{{ route.driver_id }}" />
@@ -106,10 +122,33 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
+              <tr class="bg-indigo-50">
+                <td class="px-3 py-2">0</td>
+                <td class="px-3 py-2 font-mono font-semibold">START</td>
+                <td class="px-3 py-2">0</td>
+                <td class="px-3 py-2">09:00</td>
+                <td class="px-3 py-2">–</td>
+              </tr>
               {% for stop in route.stops %}
               {% set evaluated = stop.evaluation %}
               <tr>
-                <td class="px-3 py-2">{{ stop.stop_sequence }}</td>
+                <td class="px-3 py-2">
+                  <div>{{ loop.index }}</div>
+                  <div class="flex gap-1">
+                    <form method="post" action="/plans/{{ plan.plan_id }}/orders/{{ stop.order_id }}/move">
+                      <input type="hidden" name="driver_id" value="{{ route.driver_id }}" />
+                      <input type="hidden" name="vehicle_id" value="{{ route.vehicle_id }}" />
+                      <input type="hidden" name="direction" value="-1" />
+                      <button type="submit" class="text-xs text-indigo-600 hover:underline" {% if loop.first %}disabled{% endif %}>up</button>
+                    </form>
+                    <form method="post" action="/plans/{{ plan.plan_id }}/orders/{{ stop.order_id }}/move">
+                      <input type="hidden" name="driver_id" value="{{ route.driver_id }}" />
+                      <input type="hidden" name="vehicle_id" value="{{ route.vehicle_id }}" />
+                      <input type="hidden" name="direction" value="1" />
+                      <button type="submit" class="text-xs text-indigo-600 hover:underline" {% if loop.last %}disabled{% endif %}>down</button>
+                    </form>
+                  </div>
+                </td>
                 <td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline"
                   href="/orders/{{ stop.order_id }}/edit"
                   hx-get="/orders/{{ stop.order_id }}/edit"
@@ -121,6 +160,17 @@
               {% else %}
               <tr><td colspan="5" class="px-3 py-4 text-gray-400">No stops.</td></tr>
               {% endfor %}
+              <tr class="bg-indigo-50">
+                <td class="px-3 py-2">{{ route.stops|length + 1 }}</td>
+                <td class="px-3 py-2 font-mono font-semibold">END</td>
+                <td class="px-3 py-2">
+                  {{ route.return.return_driving_time_min if route.return else '–' }}
+                </td>
+                <td class="px-3 py-2">–</td>
+                <td class="px-3 py-2">
+                  {{ route.return.return_arrival_time if route.return else '–' }}
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>

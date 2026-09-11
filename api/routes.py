@@ -21,6 +21,8 @@ from services.resources import (
     generate_plan,
     evaluate_plan,
     validate_plan,
+    switch_plan_route,
+    move_plan_order,
     list_resources,
     update_driver,
     update_order,
@@ -163,6 +165,25 @@ async def api_evaluate_plan(plan_id: str):
 @router.post("/plans/{plan_id}/validate")
 async def api_validate_plan(plan_id: str):
     return validate_plan(plan_id)
+
+
+@router.patch("/plans/{plan_id}/routes")
+async def api_switch_plan_route(plan_id: str, payload: dict = Body(...)):
+    required = ("current_driver_id", "current_vehicle_id", "driver_id", "vehicle_id")
+    if any(field not in payload for field in required):
+        raise HTTPException(400, "Current and replacement driver/vehicle are required")
+    return switch_plan_route(plan_id, **{field: payload[field] for field in required})
+
+
+@router.post("/plans/{plan_id}/orders/{order_id}/move")
+async def api_move_plan_order(plan_id: str, order_id: str, payload: dict = Body(...)):
+    return move_plan_order(
+        plan_id,
+        payload.get("driver_id"),
+        payload.get("vehicle_id"),
+        order_id,
+        payload.get("direction"),
+    )
 
 
 @router.patch("/orders/{order_id}")

@@ -356,6 +356,93 @@ def add_plan_order(plan_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     return get_plan(plan_id)
 
 
+def switch_plan_route(
+    plan_id: str,
+    current_driver_id: str,
+    current_vehicle_id: str,
+    driver_id: str,
+    vehicle_id: str,
+) -> dict[str, Any]:
+    with get_db() as con:
+        route_exists = api_rows(
+            con,
+            """
+            SELECT 1 FROM plan_orders
+            WHERE plan_id = ? AND driver_id = ? AND vehicle_id = ?
+            """,
+            [plan_id, current_driver_id, current_vehicle_id],
+        )
+        if not route_exists:
+            raise HTTPException(404, "Plan route not found")
+        if not api_rows(con, "SELECT 1 FROM drivers WHERE driver_id = ?", [driver_id]):
+            raise HTTPException(404, f"Driver not found: {driver_id}")
+        if not api_rows(con, "SELECT 1 FROM vehicles WHERE vehicle_id = ?", [vehicle_id]):
+            raise HTTPException(404, f"Vehicle not found: {vehicle_id}")
+        con.execute(
+            """
+            UPDATE plan_orders
+            SET driver_id = ?, vehicle_id = ?
+            WHERE plan_id = ? AND driver_id = ? AND vehicle_id = ?
+            """,
+            [driver_id, vehicle_id, plan_id, current_driver_id, current_vehicle_id],
+        )
+        con.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
+        con.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
+    return get_plan(plan_id)
+
+
+def move_plan_order(
+    plan_id: str, driver_id: str, vehicle_id: str, order_id: str, direction: int
+) -> dict[str, Any]:
+    if direction not in (-1, 1):
+        raise HTTPException(400, "Direction must be -1 or 1")
+    with get_db() as con:
+        route_orders = api_rows(
+            con,
+            """
+            SELECT order_id, stop_sequence
+            FROM plan_orders
+            WHERE plan_id = ? AND driver_id = ? AND vehicle_id = ?
+            ORDER BY stop_sequence, order_id
+            """,
+            [plan_id, driver_id, vehicle_id],
+        )
+        order_ids = [row["order_id"] for row in route_orders]
+        if order_id not in order_ids:
+            raise HTTPException(404, "Plan order not found")
+        current_index = order_ids.index(order_id)
+        neighbor_index = current_index + direction
+        if 0 <= neighbor_index < len(order_ids):
+            reordered = order_ids.copy()
+            reordered[current_index], reordered[neighbor_index] = (
+                reordered[neighbor_index],
+                reordered[current_index],
+            )
+            con.execute(
+                """
+                UPDATE plan_orders
+                SET stop_sequence = 1000000 + stop_sequence
+                WHERE plan_id = ? AND driver_id = ? AND vehicle_id = ?
+                """,
+                [plan_id, driver_id, vehicle_id],
+            )
+            con.executemany(
+                """
+                UPDATE plan_orders
+                SET stop_sequence = ?
+                WHERE plan_id = ? AND driver_id = ? AND vehicle_id = ?
+                  AND order_id = ?
+                """,
+                [
+                    (sequence, plan_id, driver_id, vehicle_id, moved_order_id)
+                    for sequence, moved_order_id in enumerate(reordered, start=1)
+                ],
+            )
+        con.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
+        con.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
+    return get_plan(plan_id)
+
+
 def generate_plan(plan_id: str) -> dict[str, Any]:
     plan = get_plan(plan_id)
     results = run_corematch_logistics(DB_PATH).to_dict(orient="records")
