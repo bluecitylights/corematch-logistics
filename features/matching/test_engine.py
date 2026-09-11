@@ -14,7 +14,9 @@ import duckdb
 import pytest
 from pyroaring import BitMap
 
-from engine import evaluate_plan_routes, init_schema, run_corematch_logistics
+from core.database import init_schema
+from features.matching.engine import run_corematch_logistics_df as run_corematch_logistics
+from features.plans.service import evaluate_plan_routes_internal as evaluate_plan_routes
 
 
 # ------------------------------------------------------------------ #
@@ -86,7 +88,7 @@ def _make_db(drivers=None, vehicles=None, orders=None) -> str:
 class TestToolingEnforcement:
     def test_uv_lock_exists(self):
         """uv.lock must be present so deps are reproducible."""
-        lock_path = Path(__file__).parent / "uv.lock"
+        lock_path = Path(__file__).parent.parent.parent / "uv.lock"
         assert lock_path.exists(), (
             "uv.lock not found — run `uv lock` or `uv add <pkg>` to generate it."
         )

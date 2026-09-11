@@ -12,6 +12,7 @@
 - Pydantic v2 floor: `pydantic>=2.10.0`
 - All models inherit from `core.models.CoreMatchBaseModel` with `extra="forbid"` and `from_attributes=True`.
 - No backward-compatibility shims or facades: delete `services/resources.py` and old `api/routes.py`.
+- No `Any` allowed: Use concrete Pydantic schemas, `SqlScalar = str | int | float | bool | None`, and `Sequence[SqlScalar]` across all models, services, database queries, and routers.
 - Preserve existing REST API contract routes and behavior so UI and external clients function seamlessly.
 - All tests must pass cleanly under `uv run pytest`.
 
