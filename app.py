@@ -4,8 +4,8 @@ import time
 
 from fastapi import FastAPI
 
-from api import router as api_router
-from db import ensure_schema
+from features import api_router
+from core.database import init_schema as ensure_schema # assuming we moved ensure_schema
 from ui import router as ui_router
 
 
@@ -18,7 +18,9 @@ app.include_router(ui_router)
 async def startup():
     for attempt in range(5):
         try:
-            ensure_schema()
+            from core.database import get_db
+            with get_db() as con:
+                ensure_schema(con)
             break
         except Exception as e:
             if attempt == 4:
