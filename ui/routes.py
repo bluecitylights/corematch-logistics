@@ -17,7 +17,7 @@ from features.matching import engine as matching_engine
 
 router = APIRouter(tags=["ui"])
 
-TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
+TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
