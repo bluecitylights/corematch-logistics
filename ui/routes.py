@@ -1,4 +1,4 @@
-﻿"""HTML page routes rendering Jinja2 templates via Vertical Slice Services."""
+"""HTML page routes rendering Jinja2 templates via Vertical Slice Services."""
 
 from pathlib import Path
 
@@ -25,7 +25,7 @@ def _tmpl(request: Request, name: str, context: dict | None = None) -> HTMLRespo
     ctx = {"request": request}
     if context:
         ctx.update(context)
-    return templates.TemplateResponse(name, ctx)
+    return templates.TemplateResponse(request=request, name=name, context=ctx)
 
 
 def _is_htmx(request: Request) -> bool:
