@@ -2,22 +2,18 @@ import duckdb
 import pandas as pd
 from pyroaring import BitMap
 from typing import Sequence
-import math
-
 from features.matching.schemas import MatchResult
 
-def run_corematch_logistics(db_path: str = ":memory:") -> Sequence[MatchResult]:
-    """
-    Load drivers, vehicles, and orders from DuckDB; perform bitmap-accelerated
-    dual-resource matching; return a list of MatchResult objects.
-    """
-    con = duckdb.connect(db_path)
 
-    # 1. Load relational state into DataFrames
+def _execute_matching(con: duckdb.DuckDBPyConnection) -> Sequence[MatchResult]:
+    """Execute dual-resource matching against a live DuckDB connection or cursor."""
     drivers_df = con.execute("SELECT * FROM drivers").fetchdf()
     vehicles_df = con.execute("SELECT * FROM vehicles").fetchdf()
     orders_df = con.execute("SELECT * FROM orders").fetchdf()
-    
+
+    if orders_df.empty:
+        return []
+
     resource_locations_query = """
         SELECT d.driver_index, v.vehicle_index 
         FROM distance_matrix dm
@@ -25,20 +21,18 @@ def run_corematch_logistics(db_path: str = ":memory:") -> Sequence[MatchResult]:
         JOIN vehicles v ON dm.dest_zip = (SELECT zip FROM locations WHERE location_id = v.location_id)
         WHERE dm.travel_time_min <= 30
     """
-    
+
     try:
-        # Gracefully handle empty or partial tables
-        if drivers_df.empty or vehicles_df.empty or orders_df.empty:
-            con.close()
-            return []
-            
-        allowed_pairs = con.execute(resource_locations_query).fetchall()
+        if drivers_df.empty or vehicles_df.empty:
+            allowed_pairs = []
+        else:
+            allowed_pairs = con.execute(resource_locations_query).fetchall()
     except duckdb.Error:
         allowed_pairs = []
 
     # Format distance allowances
-    allowed_drivers_by_vehicle = {}
-    allowed_vehicles_by_driver = {}
+    allowed_drivers_by_vehicle: dict[int, BitMap] = {}
+    allowed_vehicles_by_driver: dict[int, BitMap] = {}
     for d_idx, v_idx in allowed_pairs:
         if d_idx not in allowed_vehicles_by_driver:
             allowed_vehicles_by_driver[d_idx] = BitMap()
@@ -48,21 +42,21 @@ def run_corematch_logistics(db_path: str = ":memory:") -> Sequence[MatchResult]:
             allowed_drivers_by_vehicle[v_idx] = BitMap()
         allowed_drivers_by_vehicle[v_idx].add(d_idx)
 
-    # 2. Build BitMap indexes
-    active_drivers = BitMap(drivers_df.loc[drivers_df["is_active"] == True, "driver_index"].tolist())
-    active_vehicles = BitMap(vehicles_df.loc[vehicles_df["is_active"] == True, "vehicle_index"].tolist())
+    # Build BitMap indexes
+    active_drivers = BitMap(drivers_df.loc[drivers_df["is_active"] == True, "driver_index"].tolist()) if not drivers_df.empty else BitMap()
+    active_vehicles = BitMap(vehicles_df.loc[vehicles_df["is_active"] == True, "vehicle_index"].tolist()) if not vehicles_df.empty else BitMap()
 
     driver_features = {
-        "adr": BitMap(drivers_df.loc[drivers_df["skill_adr"] == True, "driver_index"].tolist()),
-        "ehbo": BitMap(drivers_df.loc[drivers_df["skill_ehbo"] == True, "driver_index"].tolist()),
+        "adr": BitMap(drivers_df.loc[drivers_df["skill_adr"] == True, "driver_index"].tolist()) if not drivers_df.empty else BitMap(),
+        "ehbo": BitMap(drivers_df.loc[drivers_df["skill_ehbo"] == True, "driver_index"].tolist()) if not drivers_df.empty else BitMap(),
     }
 
     vehicle_features = {
-        "liftgate": BitMap(vehicles_df.loc[vehicles_df["spec_liftgate"] == True, "vehicle_index"].tolist()),
-        "refrigerated": BitMap(vehicles_df.loc[vehicles_df["spec_refrigerated"] == True, "vehicle_index"].tolist()),
+        "liftgate": BitMap(vehicles_df.loc[vehicles_df["spec_liftgate"] == True, "vehicle_index"].tolist()) if not vehicles_df.empty else BitMap(),
+        "refrigerated": BitMap(vehicles_df.loc[vehicles_df["spec_refrigerated"] == True, "vehicle_index"].tolist()) if not vehicles_df.empty else BitMap(),
     }
 
-    # 3. Matching loop
+    # Matching loop
     assigned_drivers: BitMap = BitMap()
     assigned_vehicles: BitMap = BitMap()
     results: list[MatchResult] = []
@@ -116,10 +110,19 @@ def run_corematch_logistics(db_path: str = ":memory:") -> Sequence[MatchResult]:
                 status="Unfulfilled (Missing Driver or Vehicle)",
             ))
 
-    con.close()
     return results
 
-def run_corematch_logistics_df(db_path: str = ":memory:") -> pd.DataFrame:
-    results = run_corematch_logistics(db_path)
-    return pd.DataFrame([r.model_dump() for r in results])
 
+def run_corematch_logistics(db_or_con: str | duckdb.DuckDBPyConnection = ":memory:") -> Sequence[MatchResult]:
+    """
+    Run matching against a provided DuckDB connection/cursor or a database file path.
+    """
+    if isinstance(db_or_con, str):
+        with duckdb.connect(db_or_con) as con:
+            return _execute_matching(con)
+    return _execute_matching(db_or_con)
+
+
+def run_corematch_logistics_df(db_or_con: str | duckdb.DuckDBPyConnection = ":memory:") -> pd.DataFrame:
+    results = run_corematch_logistics(db_or_con)
+    return pd.DataFrame([r.model_dump() for r in results])

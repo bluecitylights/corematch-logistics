@@ -1,3 +1,4 @@
+import threading
 from contextlib import contextmanager
 from typing import Any, TypeVar
 import duckdb
@@ -6,13 +7,68 @@ from core.config import DB_PATH, SCHEMA_PATH
 
 T = TypeVar("T", bound=BaseModel)
 
+_MASTER_LOCK = threading.Lock()
+_MASTER_CON: duckdb.DuckDBPyConnection | None = None
+_CURRENT_DB_PATH: str | None = None
+
+
+def get_master_connection(db_path: str = DB_PATH) -> duckdb.DuckDBPyConnection:
+    """Return the thread-safe master DuckDB connection for the specified db_path."""
+    global _MASTER_CON, _CURRENT_DB_PATH
+    with _MASTER_LOCK:
+        if _MASTER_CON is None or _CURRENT_DB_PATH != db_path:
+            if _MASTER_CON is not None:
+                try:
+                    _MASTER_CON.close()
+                except Exception:
+                    pass
+            _MASTER_CON = duckdb.connect(db_path)
+            _CURRENT_DB_PATH = db_path
+        return _MASTER_CON
+
+
+def close_master_connection() -> None:
+    """Close the master connection if open."""
+    global _MASTER_CON, _CURRENT_DB_PATH
+    with _MASTER_LOCK:
+        if _MASTER_CON is not None:
+            try:
+                _MASTER_CON.close()
+            except Exception:
+                pass
+            _MASTER_CON = None
+            _CURRENT_DB_PATH = None
+
+
+def set_master_connection(con: duckdb.DuckDBPyConnection | None) -> None:
+    """Explicitly set or reset the master connection (e.g. for testing)."""
+    global _MASTER_CON, _CURRENT_DB_PATH
+    with _MASTER_LOCK:
+        _MASTER_CON = con
+        _CURRENT_DB_PATH = None
+
+
+
 @contextmanager
 def get_db(db_path: str = DB_PATH):
-    con = duckdb.connect(db_path)
-    try:
-        yield con
-    finally:
-        con.close()
+    """
+    Yield a thread-safe cursor from the master connection.
+    If db_path is ':memory:', opens a dedicated connection for that memory DB context.
+    """
+    if db_path == ":memory:":
+        con = duckdb.connect(db_path)
+        try:
+            yield con
+        finally:
+            con.close()
+    else:
+        master = get_master_connection(db_path)
+        cursor = master.cursor()
+        try:
+            yield cursor
+        finally:
+            cursor.close()
+
 
 def init_schema(con: duckdb.DuckDBPyConnection) -> None:
     con.execute(SCHEMA_PATH.read_text())
@@ -49,8 +105,13 @@ def execute_update(table: str, key_col: str, key_val: Any, fields: dict[str, Any
         return _run(c)
 
 
-def seed_demo(con: duckdb.DuckDBPyConnection) -> None:
+def seed_demo(con: duckdb.DuckDBPyConnection | None = None) -> None:
     """Insert a small representative dataset for a quick smoke-test."""
+    if con is None:
+        with get_db() as c:
+            seed_demo(c)
+        return
+
     demo_locations = [
         ("1012", "Amsterdam", 52.3728, 4.8936),
         ("3011", "Rotterdam", 51.9244, 4.4777),

@@ -22,3 +22,33 @@ def test_query_models_maps_rows(tmp_path):
     assert results[0].name == "Alice"
     assert results[1].id == 2
 
+
+def test_concurrent_get_db_access(tmp_path):
+    import threading
+    from core.database import get_db, close_master_connection
+    
+    test_db = str(tmp_path / "concurrent.duckdb")
+    with get_db(test_db) as con:
+        con.execute("CREATE TABLE concurrent_test (val INT)")
+        
+    errors = []
+    def worker(val):
+        try:
+            with get_db(test_db) as con:
+                con.execute("INSERT INTO concurrent_test VALUES (?)", [val])
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(15)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors
+    with get_db(test_db) as con:
+        count = con.execute("SELECT COUNT(*) FROM concurrent_test").fetchone()[0]
+        assert count == 15
+    close_master_connection()
+
+

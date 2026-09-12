@@ -1,12 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from features.matching.schemas import MatchResult
-from features.matching import engine
-from core.config import DB_PATH
+from features.matching.service import MatchingService, get_matching_service
 
 router = APIRouter(prefix="/api/match", tags=["matching"])
 
-@router.post("", response_model=list[MatchResult])
-async def api_run_matching():
-    # Matching engine opens its own connection for pure pandas analytical speed
-    return engine.run_corematch_logistics(DB_PATH)
 
+@router.post("", response_model=list[MatchResult])
+async def api_run_matching(service: MatchingService = Depends(get_matching_service)):
+    return service.match()
