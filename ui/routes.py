@@ -369,9 +369,9 @@ async def run_match(request: Request):
 
 @router.post("/seed", response_class=HTMLResponse)
 async def seed_demo(request: Request):
-    from engine.matching import _seed_demo
+    from core.database import seed_demo
     with get_db() as con:
         if con.execute("SELECT COUNT(*) FROM drivers").fetchone()[0] == 0:
-            _seed_demo(con)
+            seed_demo(con)
     return HTMLResponse("<p class=\"text-green-600 font-semibold\">Demo data seeded ✓</p>")
 

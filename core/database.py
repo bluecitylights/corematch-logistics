@@ -48,3 +48,57 @@ def execute_update(table: str, key_col: str, key_val: Any, fields: dict[str, Any
     with get_db() as c:
         return _run(c)
 
+
+def seed_demo(con: duckdb.DuckDBPyConnection) -> None:
+    """Insert a small representative dataset for a quick smoke-test."""
+    demo_locations = [
+        ("1012", "Amsterdam", 52.3728, 4.8936),
+        ("3011", "Rotterdam", 51.9244, 4.4777),
+        ("3511", "Utrecht", 52.0907, 5.1214),
+    ]
+    con.executemany(
+        """
+        INSERT INTO locations (zip, city, latitude, longitude)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT (zip) DO NOTHING
+        """,
+        demo_locations,
+    )
+    location_ids = {
+        city: location_id
+        for location_id, city in con.execute(
+            "SELECT location_id, city FROM locations WHERE city IN ('Amsterdam', 'Rotterdam', 'Utrecht')"
+        ).fetchall()
+    }
+    con.executemany(
+        "INSERT INTO drivers (driver_id, location_id, is_active, skill_adr, skill_ehbo) "
+        "VALUES (?, ?, ?, ?, ?)",
+        [
+            ("DRV-001", location_ids["Amsterdam"], True, True, False),
+            ("DRV-002", location_ids["Amsterdam"], True, False, True),
+            ("DRV-003", location_ids["Rotterdam"], True, True, True),
+            ("DRV-004", location_ids["Utrecht"], True, False, False),
+            ("DRV-005", location_ids["Amsterdam"], False, True, True),
+        ],
+    )
+    con.executemany(
+        "INSERT INTO vehicles (vehicle_id, license_plate, location_id, is_active, "
+        "spec_liftgate, spec_refrigerated) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            ("VEH-001", "AB-12-CD", location_ids["Amsterdam"], True, True, False),
+            ("VEH-002", "EF-34-GH", location_ids["Amsterdam"], True, False, True),
+            ("VEH-003", "IJ-56-KL", location_ids["Rotterdam"], True, True, True),
+            ("VEH-004", "MN-78-OP", location_ids["Utrecht"], True, False, False),
+        ],
+    )
+    con.executemany(
+        "INSERT INTO orders (order_id, destination_location_id, req_driver_adr, req_driver_ehbo, "
+        "req_vehicle_liftgate, req_vehicle_refrigerated) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            ("ORD-001", location_ids["Amsterdam"], True, False, True, False),
+            ("ORD-002", location_ids["Amsterdam"], False, True, False, True),
+            ("ORD-003", location_ids["Rotterdam"], False, False, False, False),
+            ("ORD-004", location_ids["Rotterdam"], True, True, False, False),
+            ("ORD-005", location_ids["Utrecht"], True, False, False, False),
+        ],
+    )
