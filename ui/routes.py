@@ -106,6 +106,7 @@ async def drivers_page(request: Request):
 @router.get("/plans", response_class=HTMLResponse)
 async def plans_page(
     request: Request,
+    selected_plan: str | None = None,
     validation: dict | None = None,
 ):
     with get_db() as con:
@@ -161,11 +162,15 @@ async def plans_page(
         if validation:
             plan["validation"] = validation
             
+    if not selected_plan and plans:
+        selected_plan = plans[0]["plan_id"]
+
     return _tmpl(
         request,
         "plans.html",
         {
             "plans": plans,
+            "selected_plan_id": selected_plan,
             "drivers": drivers,
             "vehicles": vehicles,
             "orders": orders,
@@ -182,28 +187,32 @@ async def add_plan(
 ):
     with get_db() as con:
         plan_service.create_plan(con, plan_schemas.PlanCreate(plan_id=plan_id, name=name))
-    return await plans_page(request)
+    return await plans_page(request, selected_plan=plan_id)
 
 
 @router.post("/plans/{plan_id}/match", response_class=HTMLResponse)
 async def run_plan_match(plan_id: str, request: Request):
     with get_db() as con:
         plan_service.generate_plan(con, plan_id)
-    return await plans_page(request)
+    return await plans_page(request, selected_plan=plan_id)
 
 
 @router.post("/plans/{plan_id}/evaluate", response_class=HTMLResponse)
 async def evaluate_plan_page(plan_id: str, request: Request):
     with get_db() as con:
         plan_service.evaluate_plan(con, plan_id)
-    return await plans_page(request)
+    return await plans_page(request, selected_plan=plan_id)
 
 
 @router.post("/plans/{plan_id}/validate", response_class=HTMLResponse)
 async def validate_plan_page(plan_id: str, request: Request):
     with get_db() as con:
         res = plan_service.validate_plan(con, plan_id)
-    return await plans_page(request, validation={"errors": res.errors} if res else None)
+    return await plans_page(
+        request,
+        selected_plan=plan_id,
+        validation={"plan_id": plan_id, "valid": len(res.errors) == 0, "errors": res.errors} if res else None
+    )
 
 
 @router.post("/plans/{plan_id}/routes", response_class=HTMLResponse)
@@ -223,7 +232,7 @@ async def switch_plan_route_page(
             current_vehicle_id,
             plan_schemas.PlanRouteSwitch(driver_id=driver_id, vehicle_id=vehicle_id)
         )
-    return await plans_page(request)
+    return await plans_page(request, selected_plan=plan_id)
 
 
 @router.post("/plans/{plan_id}/orders/{order_id}/move", response_class=HTMLResponse)
@@ -241,7 +250,7 @@ async def move_plan_order_page(
         except ValueError as e:
             from fastapi import HTTPException
             raise HTTPException(status_code=400, detail=str(e))
-    return await plans_page(request)
+    return await plans_page(request, selected_plan=plan_id)
 
 
 @router.post("/plans/{plan_id}/orders", response_class=HTMLResponse)
@@ -262,7 +271,7 @@ async def add_plan_order_page(
         except ValueError as e:
             from fastapi import HTTPException
             raise HTTPException(status_code=400, detail=str(e))
-    return await plans_page(request)
+    return await plans_page(request, selected_plan=plan_id)
 
 
 @router.post("/locations", response_class=HTMLResponse)
