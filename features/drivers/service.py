@@ -43,3 +43,10 @@ def get_driver_service() -> Generator[DriverService, None, None]:
 
 
 driver_service = DriverService()
+
+list_drivers = driver_service.list_drivers
+create_driver = driver_service.create_driver
+update_driver = driver_service.update_driver
+delete_driver = driver_service.delete_driver
+count_active = driver_service.count_active
+

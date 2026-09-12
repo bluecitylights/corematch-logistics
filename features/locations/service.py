@@ -65,3 +65,9 @@ def get_location_service() -> Generator[LocationService, None, None]:
 
 
 location_service = LocationService()
+
+rebuild_distance_matrix = location_service.rebuild_distance_matrix
+list_locations = location_service.list_locations
+create_location = location_service.create_location
+get_distance_matrix = location_service.get_distance_matrix
+

@@ -401,3 +401,13 @@ def get_plan_service():
 
 
 plan_service = PlanService()
+
+list_plans = plan_service.list_plans
+create_plan = plan_service.create_plan
+get_plan = plan_service.get_plan
+add_plan_order = plan_service.add_plan_order
+switch_plan_route = plan_service.switch_plan_route
+move_plan_order = plan_service.move_plan_order
+generate_plan = plan_service.generate_plan
+evaluate_plan = plan_service.evaluate_plan
+validate_plan = plan_service.validate_plan

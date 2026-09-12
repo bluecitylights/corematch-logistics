@@ -5,12 +5,18 @@ from pathlib import Path
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from features.locations import service as location_service, schemas as location_schemas
-from features.drivers import service as driver_service, schemas as driver_schemas
-from features.vehicles import service as vehicle_service, schemas as vehicle_schemas
-from features.orders import service as order_service, schemas as order_schemas
-from features.plans import service as plan_service, schemas as plan_schemas
+from features.locations.service import location_service
+from features.locations import schemas as location_schemas
+from features.drivers.service import driver_service
+from features.drivers import schemas as driver_schemas
+from features.vehicles.service import vehicle_service
+from features.vehicles import schemas as vehicle_schemas
+from features.orders.service import order_service
+from features.orders import schemas as order_schemas
+from features.plans.service import plan_service
+from features.plans import schemas as plan_schemas
 from features.matching import engine as matching_engine
+
 
 router = APIRouter(tags=["ui"])
 

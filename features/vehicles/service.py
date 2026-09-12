@@ -43,3 +43,9 @@ def get_vehicle_service() -> Generator[VehicleService, None, None]:
 
 
 vehicle_service = VehicleService()
+
+list_vehicles = vehicle_service.list_vehicles
+create_vehicle = vehicle_service.create_vehicle
+update_vehicle = vehicle_service.update_vehicle
+delete_vehicle = vehicle_service.delete_vehicle
+count_active = vehicle_service.count_active

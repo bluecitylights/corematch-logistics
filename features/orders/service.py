@@ -45,3 +45,9 @@ def get_order_service() -> Generator[OrderService, None, None]:
 
 
 order_service = OrderService()
+
+list_orders = order_service.list_orders
+create_order = order_service.create_order
+update_order = order_service.update_order
+delete_order = order_service.delete_order
+count = order_service.count
