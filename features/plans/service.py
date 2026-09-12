@@ -250,26 +250,28 @@ def evaluate_plan(con: duckdb.DuckDBPyConnection, plan_id: str) -> PlanDetail:
     con.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
     con.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
     
-    con.executemany(
-        """
-        INSERT INTO plan_evaluations
-            (plan_id, order_id, driver_id, vehicle_id, stop_sequence,
-             origin_zip, destination_zip, driving_time_min,
-             departure_time, arrival_time)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        [(plan_id, item["order_id"], item["driver_id"], item["vehicle_id"], item["stop_sequence"], item["origin_zip"], item["destination_zip"], item["driving_time_min"], item["departure_time"], item["arrival_time"]) for item in evaluated["stops"]]
-    )
+    if evaluated["stops"]:
+        con.executemany(
+            """
+            INSERT INTO plan_evaluations
+                (plan_id, order_id, driver_id, vehicle_id, stop_sequence,
+                 origin_zip, destination_zip, driving_time_min,
+                 departure_time, arrival_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [(plan_id, item["order_id"], item["driver_id"], item["vehicle_id"], item["stop_sequence"], item["origin_zip"], item["destination_zip"], item["driving_time_min"], item["departure_time"], item["arrival_time"]) for item in evaluated["stops"]]
+        )
     
-    con.executemany(
-        """
-        INSERT INTO plan_route_evaluations
-            (plan_id, driver_id, vehicle_id, start_zip, last_stop_zip,
-             return_driving_time_min, return_departure_time, return_arrival_time)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        [(plan_id, item["driver_id"], item["vehicle_id"], item["start_zip"], item["last_stop_zip"], item["return_driving_time_min"], item["return_departure_time"], item["return_arrival_time"]) for item in evaluated["routes"]]
-    )
+    if evaluated["routes"]:
+        con.executemany(
+            """
+            INSERT INTO plan_route_evaluations
+                (plan_id, driver_id, vehicle_id, start_zip, last_stop_zip,
+                 return_driving_time_min, return_departure_time, return_arrival_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [(plan_id, item["driver_id"], item["vehicle_id"], item["start_zip"], item["last_stop_zip"], item["return_driving_time_min"], item["return_departure_time"], item["return_arrival_time"]) for item in evaluated["routes"]]
+        )
     
     detail = get_plan(con, plan_id)
     if detail is None:
