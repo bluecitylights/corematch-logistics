@@ -114,22 +114,37 @@ async def plans_page(
         for p in plan_models:
             d = plan_service.get_plan(con, p.plan_id)
             if d:
-                # Format to dict-like lists to match what template expects (or we can just pass Pydantic models directly)
-                plans.append({
+                plan_dict = {
                     "plan_id": d.plan_id,
                     "name": d.name,
                     "orders": [{"order_id": a.order_id, "driver_id": a.driver_id, "vehicle_id": a.vehicle_id, "stop_sequence": a.stop_sequence} for a in d.assignments],
-                    "evaluation": {
-                        "stops": [s.model_dump() for s in d.evaluation.stops],
-                        "routes": [r.model_dump() for r in d.evaluation.routes]
-                    } if d.evaluation else {"stops": [], "routes": []}
-                })
+                }
+                groups = {}
+                for a in d.assignments:
+                    key = (a.driver_id, a.vehicle_id)
+                    if key not in groups:
+                        groups[key] = {"driver_id": a.driver_id, "vehicle_id": a.vehicle_id, "stops": []}
+                    
+                    stop_eval = next((s for s in (d.evaluation.stops if d.evaluation else []) if s.order_id == a.order_id), None)
+                    groups[key]["stops"].append({
+                        "order_id": a.order_id,
+                        "evaluation": stop_eval.model_dump() if stop_eval else None
+                    })
+                
+                route_groups = []
+                for key, group in groups.items():
+                    route_eval = next((r for r in (d.evaluation.routes if d.evaluation else []) if r.driver_id == key[0] and r.vehicle_id == key[1]), None)
+                    group["return"] = route_eval.model_dump() if route_eval else None
+                    route_groups.append(group)
+                    
+                plan_dict["route_groups"] = route_groups
+                plans.append(plan_dict)
 
-        drivers = [{"driver_id": d.driver_id} for d in driver_service.list_drivers(con)]
-        vehicles = [{"vehicle_id": v.vehicle_id} for v in vehicle_service.list_vehicles(con)]
+        order_locations = {l["location_id"]: l["address"] for l in _locations_context()}
+        drivers = [{"driver_id": d.driver_id, "location_label": order_locations.get(d.location_id, "Unknown")} for d in driver_service.list_drivers(con)]
+        vehicles = [{"vehicle_id": v.vehicle_id, "location_label": order_locations.get(v.location_id, "Unknown")} for v in vehicle_service.list_vehicles(con)]
         orders_raw = order_service.list_orders(con)
         
-        order_locations = {l["location_id"]: l["address"] for l in _locations_context()}
         orders = []
         for o in orders_raw:
             o_dict = o.model_dump()
