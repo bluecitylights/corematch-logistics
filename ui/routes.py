@@ -221,7 +221,11 @@ async def move_plan_order_page(
     direction: int = Form(...),
 ):
     with get_db() as con:
-        plan_service.move_plan_order(con, plan_id, driver_id, vehicle_id, order_id, direction)
+        try:
+            plan_service.move_plan_order(con, plan_id, driver_id, vehicle_id, order_id, direction)
+        except ValueError as e:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail=str(e))
     return await plans_page(request)
 
 
@@ -234,11 +238,15 @@ async def add_plan_order_page(
     order_id: str = Form(...),
 ):
     with get_db() as con:
-        plan_service.add_plan_order(
-            con,
-            plan_id,
-            plan_schemas.PlanOrderAdd(driver_id=driver_id, vehicle_id=vehicle_id, order_id=order_id)
-        )
+        try:
+            plan_service.add_plan_order(
+                con,
+                plan_id,
+                plan_schemas.PlanOrderAdd(driver_id=driver_id, vehicle_id=vehicle_id, order_id=order_id)
+            )
+        except ValueError as e:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail=str(e))
     return await plans_page(request)
 
 
