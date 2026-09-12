@@ -27,3 +27,10 @@ async def startup():
                 raise
             print(f"[app] DB not ready ({e}), retrying in 2s…", flush=True)
             time.sleep(2)
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    from core.database import close_master_connection
+    close_master_connection()
+

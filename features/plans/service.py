@@ -204,8 +204,9 @@ class PlanService(BaseService):
             if not plan:
                 raise ValueError(f"Plan not found: {plan_id}")
                 
-            results = run_corematch_logistics(DB_PATH)  # Separate connection internally
+            results = run_corematch_logistics(c)
             matched = [r for r in results if r.status == "Fully Matched"]
+
             
             c.execute("DELETE FROM plan_orders WHERE plan_id = ?", [plan_id])
             

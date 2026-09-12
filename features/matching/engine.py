@@ -4,14 +4,28 @@ from pyroaring import BitMap
 from typing import Sequence
 import math
 
+from core.config import DB_PATH
 from features.matching.schemas import MatchResult
 
-def run_corematch_logistics(db_path: str = ":memory:") -> Sequence[MatchResult]:
+def run_corematch_logistics(db_or_con: str | duckdb.DuckDBPyConnection = ":memory:") -> Sequence[MatchResult]:
     """
     Load drivers, vehicles, and orders from DuckDB; perform bitmap-accelerated
     dual-resource matching; return a list of MatchResult objects.
     """
-    con = duckdb.connect(db_path)
+    if isinstance(db_or_con, duckdb.DuckDBPyConnection):
+        con = db_or_con
+        should_close = False
+    elif isinstance(db_or_con, str):
+        if db_or_con == DB_PATH:
+            from core.database import get_master_connection
+            con = get_master_connection(db_or_con).cursor()
+            should_close = True
+        else:
+            con = duckdb.connect(db_or_con)
+            should_close = True
+    else:
+        con = duckdb.connect(":memory:")
+        should_close = True
 
     # 1. Load relational state into DataFrames
     drivers_df = con.execute("SELECT * FROM drivers").fetchdf()
@@ -27,7 +41,8 @@ def run_corematch_logistics(db_path: str = ":memory:") -> Sequence[MatchResult]:
     """
     
     if orders_df.empty:
-        con.close()
+        if should_close:
+            con.close()
         return []
 
     try:
@@ -118,10 +133,12 @@ def run_corematch_logistics(db_path: str = ":memory:") -> Sequence[MatchResult]:
                 status="Unfulfilled (Missing Driver or Vehicle)",
             ))
 
-    con.close()
+    if should_close:
+        con.close()
     return results
 
-def run_corematch_logistics_df(db_path: str = ":memory:") -> pd.DataFrame:
-    results = run_corematch_logistics(db_path)
+def run_corematch_logistics_df(db_or_con: str | duckdb.DuckDBPyConnection = ":memory:") -> pd.DataFrame:
+    results = run_corematch_logistics(db_or_con)
     return pd.DataFrame([r.model_dump() for r in results])
+
 
