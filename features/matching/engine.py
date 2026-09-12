@@ -26,13 +26,15 @@ def run_corematch_logistics(db_path: str = ":memory:") -> Sequence[MatchResult]:
         WHERE dm.travel_time_min <= 30
     """
     
+    if orders_df.empty:
+        con.close()
+        return []
+
     try:
-        # Gracefully handle empty or partial tables
-        if drivers_df.empty or vehicles_df.empty or orders_df.empty:
-            con.close()
-            return []
-            
-        allowed_pairs = con.execute(resource_locations_query).fetchall()
+        if drivers_df.empty or vehicles_df.empty:
+            allowed_pairs = []
+        else:
+            allowed_pairs = con.execute(resource_locations_query).fetchall()
     except duckdb.Error:
         allowed_pairs = []
 
@@ -49,17 +51,17 @@ def run_corematch_logistics(db_path: str = ":memory:") -> Sequence[MatchResult]:
         allowed_drivers_by_vehicle[v_idx].add(d_idx)
 
     # 2. Build BitMap indexes
-    active_drivers = BitMap(drivers_df.loc[drivers_df["is_active"] == True, "driver_index"].tolist())
-    active_vehicles = BitMap(vehicles_df.loc[vehicles_df["is_active"] == True, "vehicle_index"].tolist())
+    active_drivers = BitMap(drivers_df.loc[drivers_df["is_active"] == True, "driver_index"].tolist()) if not drivers_df.empty else BitMap()
+    active_vehicles = BitMap(vehicles_df.loc[vehicles_df["is_active"] == True, "vehicle_index"].tolist()) if not vehicles_df.empty else BitMap()
 
     driver_features = {
-        "adr": BitMap(drivers_df.loc[drivers_df["skill_adr"] == True, "driver_index"].tolist()),
-        "ehbo": BitMap(drivers_df.loc[drivers_df["skill_ehbo"] == True, "driver_index"].tolist()),
+        "adr": BitMap(drivers_df.loc[drivers_df["skill_adr"] == True, "driver_index"].tolist()) if not drivers_df.empty else BitMap(),
+        "ehbo": BitMap(drivers_df.loc[drivers_df["skill_ehbo"] == True, "driver_index"].tolist()) if not drivers_df.empty else BitMap(),
     }
 
     vehicle_features = {
-        "liftgate": BitMap(vehicles_df.loc[vehicles_df["spec_liftgate"] == True, "vehicle_index"].tolist()),
-        "refrigerated": BitMap(vehicles_df.loc[vehicles_df["spec_refrigerated"] == True, "vehicle_index"].tolist()),
+        "liftgate": BitMap(vehicles_df.loc[vehicles_df["spec_liftgate"] == True, "vehicle_index"].tolist()) if not vehicles_df.empty else BitMap(),
+        "refrigerated": BitMap(vehicles_df.loc[vehicles_df["spec_refrigerated"] == True, "vehicle_index"].tolist()) if not vehicles_df.empty else BitMap(),
     }
 
     # 3. Matching loop

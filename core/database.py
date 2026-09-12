@@ -49,8 +49,13 @@ def execute_update(table: str, key_col: str, key_val: Any, fields: dict[str, Any
         return _run(c)
 
 
-def seed_demo(con: duckdb.DuckDBPyConnection) -> None:
+def seed_demo(con: duckdb.DuckDBPyConnection | None = None) -> None:
     """Insert a small representative dataset for a quick smoke-test."""
+    if con is None:
+        with get_db() as c:
+            seed_demo(c)
+        return
+
     demo_locations = [
         ("1012", "Amsterdam", 52.3728, 4.8936),
         ("3011", "Rotterdam", 51.9244, 4.4777),
