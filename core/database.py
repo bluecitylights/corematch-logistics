@@ -40,6 +40,15 @@ def close_master_connection() -> None:
             _CURRENT_DB_PATH = None
 
 
+def set_master_connection(con: duckdb.DuckDBPyConnection | None) -> None:
+    """Explicitly set or reset the master connection (e.g. for testing)."""
+    global _MASTER_CON, _CURRENT_DB_PATH
+    with _MASTER_LOCK:
+        _MASTER_CON = con
+        _CURRENT_DB_PATH = None
+
+
+
 @contextmanager
 def get_db(db_path: str = DB_PATH):
     """

@@ -5,8 +5,6 @@ from pathlib import Path
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-
-from core.config import DB_PATH
 from features.locations import service as location_service, schemas as location_schemas
 from features.drivers import service as driver_service, schemas as driver_schemas
 from features.vehicles import service as vehicle_service, schemas as vehicle_schemas

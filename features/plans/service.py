@@ -398,6 +398,11 @@ def evaluate_plan_routes_internal(rows: list[dict], travel_times: dict[tuple[str
     return {"stops": evaluated, "routes": route_summaries}
 
 
+def get_plan_service():
+    with get_db() as con:
+        yield PlanService(con)
+
+
 plan_service = PlanService()
 
 # Backward-compatibility aliases
@@ -410,4 +415,5 @@ move_plan_order = plan_service.move_plan_order
 generate_plan = plan_service.generate_plan
 evaluate_plan = plan_service.evaluate_plan
 validate_plan = plan_service.validate_plan
+
 

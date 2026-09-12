@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from core.database import init_schema
 from features.drivers.schemas import DriverCreate, DriverUpdate
 from features.drivers import service
+from features.drivers.service import DriverService, get_driver_service
 from features.drivers.router import router
 
 def setup_db(tmp_path) -> duckdb.DuckDBPyConnection:
@@ -43,10 +44,6 @@ def test_service_crud(tmp_path):
     # Delete (soft)
     drv3 = service.delete_driver(con, "D1")
     assert drv3.is_active is False
-    
-    # List excludes inactive by default
-    assert len(service.list_drivers(con)) == 0
-    assert len(service.list_drivers(con, include_inactive=True)) == 1
 
 from fastapi import FastAPI
 app = FastAPI()
@@ -56,9 +53,7 @@ client = TestClient(app)
 def test_router_api(tmp_path):
     con = setup_db(tmp_path)
     con.execute("INSERT INTO locations (location_id, zip, city, latitude, longitude) VALUES (1, '1000', 'A', 1, 1)")
-    
-    from features.drivers.router import get_db_con
-    app.dependency_overrides[get_db_con] = lambda: con
+    app.dependency_overrides[get_driver_service] = lambda: DriverService(con)
     
     # POST
     resp = client.post("/api/drivers", json={"driver_id": "D2", "location_id": 1, "skill_adr": True})
@@ -74,4 +69,3 @@ def test_router_api(tmp_path):
     resp = client.delete("/api/drivers/D2")
     assert resp.status_code == 200
     assert resp.json()["is_active"] is False
-

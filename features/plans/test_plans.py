@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from core.database import init_schema
 from features.plans.schemas import PlanCreate, PlanOrderAdd, PlanRouteSwitch
 from features.plans import service
+from features.plans.service import PlanService, get_plan_service
 from features.plans.router import router
 
 def setup_db(tmp_path) -> duckdb.DuckDBPyConnection:
@@ -46,3 +47,19 @@ def test_plan_crud(tmp_path):
     assigned_o1 = next(a for a in d.assignments if a.order_id == "O1")
     assert assigned_o1.stop_sequence == 2
 
+from fastapi import FastAPI
+app = FastAPI()
+app.include_router(router)
+client = TestClient(app)
+
+def test_plan_router(tmp_path):
+    con = setup_db(tmp_path)
+    app.dependency_overrides[get_plan_service] = lambda: PlanService(con)
+    
+    resp = client.post("/api/plans", json={"plan_id": "P2", "name": "Plan 2"})
+    assert resp.status_code == 200
+    assert resp.json()["plan_id"] == "P2"
+    
+    resp = client.get("/api/plans")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1

@@ -1,36 +1,27 @@
-import duckdb
 from fastapi import APIRouter, Depends, HTTPException
-from core.database import get_db
 from features.orders.schemas import Order, OrderCreate, OrderUpdate
-from features.orders.service import order_service
+from features.orders.service import OrderService, get_order_service
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
-def get_db_con():
-    with get_db() as con:
-        yield con
-
 @router.get("", response_model=list[Order])
-async def list_orders_api(con: duckdb.DuckDBPyConnection = Depends(get_db_con)):
-    return order_service.list_orders(con=con)
+async def list_orders_api(service: OrderService = Depends(get_order_service)):
+    return service.list_orders()
 
 @router.post("", response_model=Order)
-async def create_order_api(payload: OrderCreate, con: duckdb.DuckDBPyConnection = Depends(get_db_con)):
-    return order_service.create_order(payload, con=con)
+async def create_order_api(payload: OrderCreate, service: OrderService = Depends(get_order_service)):
+    return service.create_order(payload)
 
 @router.patch("/{order_id}", response_model=Order)
-async def update_order_api(order_id: str, payload: OrderUpdate, con: duckdb.DuckDBPyConnection = Depends(get_db_con)):
-    order = order_service.update_order(order_id, payload, con=con)
+async def update_order_api(order_id: str, payload: OrderUpdate, service: OrderService = Depends(get_order_service)):
+    order = service.update_order(order_id, payload)
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")
     return order
 
 @router.delete("/{order_id}")
-async def delete_order_api(order_id: str, con: duckdb.DuckDBPyConnection = Depends(get_db_con)):
-    order = order_service.delete_order(order_id, con=con)
+async def delete_order_api(order_id: str, service: OrderService = Depends(get_order_service)):
+    order = service.delete_order(order_id)
     if order is None:
         raise HTTPException(status_code=404, detail=f"Order not found: {order_id}")
     return {"status": "deleted"}
-
-
-
