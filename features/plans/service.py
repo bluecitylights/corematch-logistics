@@ -1,8 +1,8 @@
 import duckdb
-from typing import Sequence
+from typing import Sequence, Any
 from datetime import datetime, timedelta
 from core.base_service import BaseService
-from core.database import get_db, query_models, query_model_or_none, api_rows
+from core.database import get_db
 from features.plans.schemas import (
     Plan,
     PlanCreate,
@@ -22,40 +22,37 @@ class PlanService(BaseService):
     """Domain service for managing delivery plans, routes, evaluations, and validations."""
 
     def list_plans(self) -> Sequence[Plan]:
-        return query_models(Plan, self.con, "SELECT plan_id, name FROM plans ORDER BY plan_id")
+        return self.query_models(Plan, "SELECT plan_id, name FROM plans ORDER BY plan_id")
 
     def create_plan(self, payload: PlanCreate) -> Plan:
-        self.con.execute(
+        self.execute(
             "INSERT INTO plans (plan_id, name) VALUES (?, ?)",
             [payload.plan_id, payload.name],
         )
-        plan = query_model_or_none(Plan, self.con, "SELECT plan_id, name FROM plans WHERE plan_id = ?", [payload.plan_id])
+        plan = self.query_model_or_none(Plan, "SELECT plan_id, name FROM plans WHERE plan_id = ?", [payload.plan_id])
         if plan is None:
             raise ValueError("Failed to retrieve created plan")
         return plan
 
     def get_plan(self, plan_id: str) -> PlanDetail | None:
-        plan = query_model_or_none(Plan, self.con, "SELECT plan_id, name FROM plans WHERE plan_id = ?", [plan_id])
+        plan = self.query_model_or_none(Plan, "SELECT plan_id, name FROM plans WHERE plan_id = ?", [plan_id])
         if not plan:
             return None
 
-        assignments = query_models(
+        assignments = self.query_models(
             PlanOrderAssignment,
-            self.con,
             "SELECT plan_id, order_id, driver_id, vehicle_id, stop_sequence FROM plan_orders WHERE plan_id = ? ORDER BY stop_sequence, order_id",
             [plan_id],
         )
 
-        stops = query_models(
+        stops = self.query_models(
             StopEvaluation,
-            self.con,
             "SELECT order_id, driver_id, vehicle_id, stop_sequence, origin_zip, destination_zip, driving_time_min, departure_time, arrival_time FROM plan_evaluations WHERE plan_id = ? ORDER BY stop_sequence, order_id",
             [plan_id],
         )
 
-        routes = query_models(
+        routes = self.query_models(
             RouteEvaluation,
-            self.con,
             "SELECT plan_id, driver_id, vehicle_id, start_zip, last_stop_zip, return_driving_time_min, return_departure_time, return_arrival_time FROM plan_route_evaluations WHERE plan_id = ?",
             [plan_id],
         )
@@ -68,34 +65,32 @@ class PlanService(BaseService):
         )
 
     def add_plan_order(self, plan_id: str, payload: PlanOrderAdd) -> PlanDetail:
-        if not api_rows(self.con, "SELECT 1 FROM plans WHERE plan_id = ?", [plan_id]):
+        if not self.api_rows("SELECT 1 FROM plans WHERE plan_id = ?", [plan_id]):
             raise ValueError(f"Plan not found: {plan_id}")
-        if not api_rows(self.con, "SELECT 1 FROM orders WHERE order_id = ?", [payload.order_id]):
+        if not self.api_rows("SELECT 1 FROM orders WHERE order_id = ?", [payload.order_id]):
             raise ValueError(f"Order not found: {payload.order_id}")
-        if not api_rows(self.con, "SELECT 1 FROM drivers WHERE driver_id = ?", [payload.driver_id]):
+        if not self.api_rows("SELECT 1 FROM drivers WHERE driver_id = ?", [payload.driver_id]):
             raise ValueError(f"Driver not found: {payload.driver_id}")
-        if not api_rows(self.con, "SELECT 1 FROM vehicles WHERE vehicle_id = ?", [payload.vehicle_id]):
+        if not self.api_rows("SELECT 1 FROM vehicles WHERE vehicle_id = ?", [payload.vehicle_id]):
             raise ValueError(f"Vehicle not found: {payload.vehicle_id}")
 
-        duplicate = api_rows(
-            self.con,
+        duplicate = self.api_rows(
             "SELECT 1 FROM plan_orders WHERE plan_id = ? AND order_id = ?",
             [plan_id, payload.order_id],
         )
         if duplicate:
             raise ValueError("Order already in plan")
 
-        self.con.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
-        self.con.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
+        self.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
+        self.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
 
-        max_seq_row = api_rows(
-            self.con,
+        max_seq_row = self.api_rows(
             "SELECT COALESCE(MAX(stop_sequence), 0) AS m FROM plan_orders WHERE plan_id = ? AND driver_id = ? AND vehicle_id = ?",
             [plan_id, payload.driver_id, payload.vehicle_id],
         )
         seq = max_seq_row[0]["m"] + 1
 
-        self.con.execute(
+        self.execute(
             "INSERT INTO plan_orders (plan_id, order_id, driver_id, vehicle_id, stop_sequence) VALUES (?, ?, ?, ?, ?)",
             [plan_id, payload.order_id, payload.driver_id, payload.vehicle_id, seq],
         )
@@ -105,21 +100,20 @@ class PlanService(BaseService):
         return detail
 
     def switch_plan_route(self, plan_id: str, current_driver_id: str, current_vehicle_id: str, payload: PlanRouteSwitch) -> PlanDetail:
-        if not api_rows(
-            self.con,
+        if not self.api_rows(
             "SELECT 1 FROM plan_orders WHERE plan_id = ? AND driver_id = ? AND vehicle_id = ?",
             [plan_id, current_driver_id, current_vehicle_id],
         ):
             raise ValueError("Plan route not found")
-        if not api_rows(self.con, "SELECT 1 FROM drivers WHERE driver_id = ?", [payload.driver_id]):
+        if not self.api_rows("SELECT 1 FROM drivers WHERE driver_id = ?", [payload.driver_id]):
             raise ValueError(f"Driver not found: {payload.driver_id}")
-        if not api_rows(self.con, "SELECT 1 FROM vehicles WHERE vehicle_id = ?", [payload.vehicle_id]):
+        if not self.api_rows("SELECT 1 FROM vehicles WHERE vehicle_id = ?", [payload.vehicle_id]):
             raise ValueError(f"Vehicle not found: {payload.vehicle_id}")
 
-        self.con.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
-        self.con.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
+        self.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
+        self.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
 
-        self.con.execute(
+        self.execute(
             "UPDATE plan_orders SET driver_id = ?, vehicle_id = ? WHERE plan_id = ? AND driver_id = ? AND vehicle_id = ?",
             [payload.driver_id, payload.vehicle_id, plan_id, current_driver_id, current_vehicle_id],
         )
@@ -133,8 +127,7 @@ class PlanService(BaseService):
         if direction not in (-1, 1):
             raise ValueError("Direction must be -1 or 1")
 
-        route_orders = api_rows(
-            self.con,
+        route_orders = self.api_rows(
             "SELECT order_id, stop_sequence FROM plan_orders WHERE plan_id = ? AND driver_id = ? AND vehicle_id = ? ORDER BY stop_sequence, order_id",
             [plan_id, driver_id, vehicle_id],
         )
@@ -152,14 +145,14 @@ class PlanService(BaseService):
         neighbor = next(row for row in route_orders if row["order_id"] == neighbor_id)
         current = next(row for row in route_orders if row["order_id"] == order_id)
 
-        self.con.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
-        self.con.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
+        self.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
+        self.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
 
-        self.con.execute(
+        self.execute(
             "UPDATE plan_orders SET stop_sequence = ? WHERE plan_id = ? AND order_id = ?",
             [neighbor["stop_sequence"], plan_id, order_id],
         )
-        self.con.execute(
+        self.execute(
             "UPDATE plan_orders SET stop_sequence = ? WHERE plan_id = ? AND order_id = ?",
             [current["stop_sequence"], plan_id, neighbor_id],
         )
@@ -174,23 +167,24 @@ class PlanService(BaseService):
         if not plan:
             raise ValueError(f"Plan not found: {plan_id}")
 
-        results = run_corematch_logistics(self.con)
+        with self.con() as con:
+            results = run_corematch_logistics(con)
         matched = [r for r in results if r.status == "Fully Matched"]
 
-        self.con.execute("DELETE FROM plan_orders WHERE plan_id = ?", [plan_id])
+        self.execute("DELETE FROM plan_orders WHERE plan_id = ?", [plan_id])
 
         assignments = [
             (plan_id, r.order_id, r.assigned_driver, r.assigned_vehicle, 1)
             for r in matched
         ]
         if assignments:
-            self.con.executemany(
+            self.executemany(
                 "INSERT INTO plan_orders (plan_id, order_id, driver_id, vehicle_id, stop_sequence) VALUES (?, ?, ?, ?, ?)",
                 assignments,
             )
 
-        self.con.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
-        self.con.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
+        self.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
+        self.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
 
         detail = self.get_plan(plan_id)
         if detail is None:
@@ -202,8 +196,7 @@ class PlanService(BaseService):
         if not plan:
             raise ValueError(f"Plan not found: {plan_id}")
 
-        rows = api_rows(
-            self.con,
+        rows = self.api_rows(
             """
             SELECT po.plan_id, po.order_id, po.driver_id, po.vehicle_id, po.stop_sequence,
                    o.destination_location_id, destination.zip AS destination_zip,
@@ -221,16 +214,16 @@ class PlanService(BaseService):
 
         matrix = {
             (row["origin_zip"], row["dest_zip"]): row["travel_time_min"]
-            for row in api_rows(self.con, "SELECT origin_zip, dest_zip, travel_time_min FROM distance_matrix")
+            for row in self.api_rows("SELECT origin_zip, dest_zip, travel_time_min FROM distance_matrix")
         }
 
         evaluated = evaluate_plan_routes_internal(rows, matrix)
 
-        self.con.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
-        self.con.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
+        self.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
+        self.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
 
         if evaluated["stops"]:
-            self.con.executemany(
+            self.executemany(
                 """
                 INSERT INTO plan_evaluations
                     (plan_id, order_id, driver_id, vehicle_id, stop_sequence,
@@ -256,7 +249,7 @@ class PlanService(BaseService):
             )
 
         if evaluated["routes"]:
-            self.con.executemany(
+            self.executemany(
                 """
                 INSERT INTO plan_route_evaluations
                     (plan_id, driver_id, vehicle_id, start_zip, last_stop_zip,
@@ -284,12 +277,11 @@ class PlanService(BaseService):
         return detail
 
     def validate_plan(self, plan_id: str) -> PlanValidationResult:
-        if not api_rows(self.con, "SELECT 1 FROM plans WHERE plan_id = ?", [plan_id]):
+        if not self.api_rows("SELECT 1 FROM plans WHERE plan_id = ?", [plan_id]):
             raise ValueError(f"Plan not found: {plan_id}")
 
         errors = []
-        rows = api_rows(
-            self.con,
+        rows = self.api_rows(
             """
             SELECT po.order_id, po.driver_id, po.vehicle_id,
                    d.location_id AS driver_location_id,
@@ -329,8 +321,7 @@ class PlanService(BaseService):
             if row["req_vehicle_refrigerated"] and not row["spec_refrigerated"]:
                 errors.append(f"Missing Refrigerated spec in {r_str}")
             if row["driver_location_id"] != row["vehicle_location_id"]:
-                matrix_check = api_rows(
-                    self.con,
+                matrix_check = self.api_rows(
                     "SELECT travel_time_min FROM distance_matrix WHERE origin_zip = ? AND dest_zip = ?",
                     [row["driver_zip"], row["vehicle_zip"]],
                 )

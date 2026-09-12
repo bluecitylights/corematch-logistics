@@ -28,7 +28,7 @@ def test_service_crud_and_matrix(tmp_path):
     assert len(locations) == 2
     
     # Matrix verification
-    matrix = loc_service.get_distance_matrix("1000")
+    matrix = loc_service.get_distance_matrix_by_zip("1000")
     assert len(matrix) == 2
     for item in matrix:
         if item.dest_zip == "1000":

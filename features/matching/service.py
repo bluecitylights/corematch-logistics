@@ -9,7 +9,8 @@ class MatchingService(BaseService):
     """Domain service for logistics matching."""
 
     def match(self) -> Sequence[MatchResult]:
-        return run_corematch_logistics(self.con)
+        with self.con() as con:
+            return run_corematch_logistics(con)
 
 
 def get_matching_service() -> Generator[MatchingService, None, None]:
