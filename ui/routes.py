@@ -71,7 +71,11 @@ async def locations_page(request: Request):
     with get_db() as con:
         locations = location_service.list_locations(con)
     rows = [
-        (location.zip, location.city, location.latitude, location.longitude)
+        {
+            "address": f"{location.zip} {location.city}",
+            "latitude": location.latitude,
+            "longitude": location.longitude
+        }
         for location in locations
     ]
     template = "partials/locations.html" if _is_htmx(request) else "locations.html"
