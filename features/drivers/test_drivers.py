@@ -15,33 +15,33 @@ def setup_db(tmp_path) -> duckdb.DuckDBPyConnection:
 
 def test_driver_schema():
     with pytest.raises(ValidationError):
-        DriverCreate(driver_id="D1", location_id="not_an_int")
+        DriverCreate(name="D1", location_id="not_an_int")
     
-    drv = DriverCreate(driver_id="D1", location_id=1, skill_adr=True)
+    drv = DriverCreate(name="D1", location_id=0, skill_adr=True)
     assert drv.skill_adr is True
     assert drv.is_active is True
 
 def test_service_crud(tmp_path):
     con = setup_db(tmp_path)
-    con.execute("INSERT INTO locations (location_id, zip, city, latitude, longitude) VALUES (1, '1000', 'A', 1, 1)")
+    con.execute("INSERT INTO locations (zip, city, latitude, longitude) VALUES ('1000', 'A', 1, 1)")
     
     drv_service = DriverService(con)
     
     # Create
-    drv1 = drv_service.create_driver(DriverCreate(driver_id="D1", location_id=1, skill_adr=True))
-    assert drv1.driver_id == "D1"
+    drv1 = drv_service.create_driver(DriverCreate(name="D1", location_id=0, skill_adr=True))
+    assert drv1.name == "D1"
     assert drv1.skill_adr is True
     
     # List
     assert len(drv_service.list_drivers()) == 1
     
     # Update
-    drv2 = drv_service.update_driver("D1", DriverUpdate(skill_ehbo=True))
+    drv2 = drv_service.update_driver(drv1.driver_id, DriverUpdate(skill_ehbo=True))
     assert drv2.skill_ehbo is True
     assert drv2.skill_adr is True # Persisted
     
     # Delete (soft)
-    drv3 = drv_service.delete_driver("D1")
+    drv3 = drv_service.delete_driver(drv1.driver_id)
     assert drv3.is_active is False
 
 from fastapi import FastAPI
@@ -51,20 +51,20 @@ client = TestClient(app)
 
 def test_router_api(tmp_path):
     con = setup_db(tmp_path)
-    con.execute("INSERT INTO locations (location_id, zip, city, latitude, longitude) VALUES (1, '1000', 'A', 1, 1)")
+    con.execute("INSERT INTO locations (zip, city, latitude, longitude) VALUES ('1000', 'A', 1, 1)")
     app.dependency_overrides[get_driver_service] = lambda: DriverService(con)
     
     # POST
-    resp = client.post("/api/drivers", json={"driver_id": "D2", "location_id": 1, "skill_adr": True})
+    resp = client.post("/api/drivers", json={"name": "D2", "location_id": 0, "skill_adr": True})
     assert resp.status_code == 200
-    assert resp.json()["driver_id"] == "D2"
+    assert resp.json()["name"] == "D2"
     
     # PATCH
-    resp = client.patch("/api/drivers/D2", json={"skill_ehbo": True})
+    resp = client.patch("/api/drivers/0", json={"skill_ehbo": True})
     assert resp.status_code == 200
     assert resp.json()["skill_ehbo"] is True
     
     # DELETE
-    resp = client.delete("/api/drivers/D2")
+    resp = client.delete("/api/drivers/0")
     assert resp.status_code == 200
     assert resp.json()["is_active"] is False

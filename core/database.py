@@ -132,7 +132,7 @@ def seed_demo(con: duckdb.DuckDBPyConnection | None = None) -> None:
         ).fetchall()
     }
     con.executemany(
-        "INSERT INTO drivers (driver_id, location_index, is_active, skill_adr, skill_ehbo) "
+        "INSERT INTO drivers (name, location_index, is_active, skill_adr, skill_ehbo) "
         "VALUES (?, ?, ?, ?, ?)",
         [
             ("DRV-001", location_indices["Amsterdam"], True, True, False),

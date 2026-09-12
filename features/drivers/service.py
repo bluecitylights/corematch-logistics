@@ -10,19 +10,19 @@ class DriverService(BaseService):
 
     def list_drivers(self, include_inactive: bool = False) -> Sequence[Driver]:
         where = "" if include_inactive else "WHERE is_active"
-        return self.query_models(Driver, f"SELECT * FROM drivers {where} ORDER BY driver_index")
+        return self.query_models(Driver, f"SELECT * FROM drivers {where} ORDER BY driver_id")
 
     def create_driver(self, payload: DriverCreate) -> Driver:
         self.execute(
-            "INSERT INTO drivers (driver_id, location_id, skill_adr, skill_ehbo, is_active) VALUES (?, ?, ?, ?, ?)",
-            [payload.driver_id, payload.location_id, payload.skill_adr, payload.skill_ehbo, payload.is_active],
+            "INSERT INTO drivers (name, location_id, skill_adr, skill_ehbo, is_active) VALUES (?, ?, ?, ?, ?)",
+            [payload.name, payload.location_id, payload.skill_adr, payload.skill_ehbo, payload.is_active],
         )
-        drv = self.query_model_or_none(Driver, "SELECT * FROM drivers WHERE driver_id = ?", [payload.driver_id])
+        drv = self.query_model_or_none(Driver, "SELECT * FROM drivers WHERE name = ?", [payload.name])
         if drv is None:
             raise ValueError("Failed to retrieve created driver")
         return drv
 
-    def update_driver(self, driver_id: str, payload: DriverUpdate) -> Driver | None:
+    def update_driver(self, driver_id: int, payload: DriverUpdate) -> Driver | None:
         fields = payload.model_dump(exclude_unset=True)
         if not fields:
             return self.query_model_or_none(Driver, "SELECT * FROM drivers WHERE driver_id = ?", [driver_id])
@@ -30,7 +30,7 @@ class DriverService(BaseService):
         self.execute_update("drivers", "driver_id", driver_id, fields)
         return self.query_model_or_none(Driver, "SELECT * FROM drivers WHERE driver_id = ?", [driver_id])
 
-    def delete_driver(self, driver_id: str) -> Driver | None:
+    def delete_driver(self, driver_id: int) -> Driver | None:
         return self.update_driver(driver_id, DriverUpdate(is_active=False))
 
     def count_active(self) -> int:

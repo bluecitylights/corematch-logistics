@@ -7,7 +7,7 @@ class DriverBase(CoreMatchBaseModel):
     skill_ehbo: bool = False
 
 class DriverCreate(DriverBase):
-    driver_id: str
+    name: str
     location_id: int
 
 class DriverUpdate(CoreMatchBaseModel):
@@ -17,5 +17,5 @@ class DriverUpdate(CoreMatchBaseModel):
     location_id: int | None = None
 
 class Driver(DriverCreate):
-    driver_index: int
+    driver_id: int
 

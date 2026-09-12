@@ -15,12 +15,13 @@ def setup_test_db(tmp_path) -> str:
     init_schema(con)
 
     # Needs some demo data to prove matching works
-    con.execute("INSERT INTO locations (location_id, zip, city, latitude, longitude) VALUES (1, '1000', 'A', 1, 1)")
-    con.execute("INSERT INTO distance_matrix (origin_zip, dest_zip, distance_m, travel_time_min) VALUES ('1000', '1000', 0, 0)")
-    con.execute("INSERT INTO drivers (driver_id, location_id, is_active, skill_adr, skill_ehbo) VALUES ('D1', 1, true, true, false)")
-    con.execute("INSERT INTO vehicles (vehicle_id, license_plate, location_id, is_active, spec_liftgate, spec_refrigerated) VALUES ('V1', 'AA', 1, true, true, false)")
-    con.execute("INSERT INTO orders (order_id, destination_location_id, req_driver_adr, req_driver_ehbo, req_vehicle_liftgate, req_vehicle_refrigerated) VALUES ('O1', 1, true, false, true, false)")
-    con.execute("INSERT INTO orders (order_id, destination_location_id, req_driver_adr, req_driver_ehbo, req_vehicle_liftgate, req_vehicle_refrigerated) VALUES ('O2', 1, false, true, false, false)")
+    con.execute("INSERT INTO locations (zip, city, latitude, longitude) VALUES ('1000', 'A', 1, 1)")
+    con.execute("INSERT INTO distance_matrix (origin_location_id, dest_location_id, distance_m, travel_time_min) VALUES (1, 2, 1500, 10)")
+    con.execute("INSERT INTO distance_matrix (origin_location_id, dest_location_id, distance_m, travel_time_min) VALUES (1, 1, 0, 0)")
+    con.execute("INSERT INTO drivers (name, location_id, is_active, skill_adr, skill_ehbo) VALUES ('D1', 1, true, true, false)")
+    con.execute("INSERT INTO vehicles (license_plate, location_id, is_active, spec_liftgate, spec_refrigerated) VALUES ('V1', 'AA', 1, true, true, false)")
+    con.execute("INSERT INTO orders (destination_location_id, req_driver_adr, req_driver_ehbo, req_vehicle_liftgate, req_vehicle_refrigerated) VALUES (1, true, false, true, false)")
+    con.execute("INSERT INTO orders (destination_location_id, req_driver_adr, req_driver_ehbo, req_vehicle_liftgate, req_vehicle_refrigerated) VALUES (1, false, true, false, false)")
 
     con.close()
     return db_path
