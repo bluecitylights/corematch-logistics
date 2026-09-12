@@ -160,10 +160,11 @@ def generate_plan(con: duckdb.DuckDBPyConnection, plan_id: str) -> PlanDetail:
         (plan_id, r.order_id, r.assigned_driver, r.assigned_vehicle, 1)
         for r in matched
     ]
-    con.executemany(
-        "INSERT INTO plan_orders (plan_id, order_id, driver_id, vehicle_id, stop_sequence) VALUES (?, ?, ?, ?, ?)",
-        assignments
-    )
+    if assignments:
+        con.executemany(
+            "INSERT INTO plan_orders (plan_id, order_id, driver_id, vehicle_id, stop_sequence) VALUES (?, ?, ?, ?, ?)",
+            assignments
+        )
     
     con.execute("DELETE FROM plan_evaluations WHERE plan_id = ?", [plan_id])
     con.execute("DELETE FROM plan_route_evaluations WHERE plan_id = ?", [plan_id])
