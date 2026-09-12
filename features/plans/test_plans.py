@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 
 from core.database import init_schema
 from features.plans.schemas import PlanCreate, PlanOrderAdd, PlanRouteSwitch
-from features.plans import service
 from features.plans.service import PlanService, get_plan_service
 from features.plans.router import router
 
@@ -26,24 +25,25 @@ def setup_db(tmp_path) -> duckdb.DuckDBPyConnection:
 
 def test_plan_crud(tmp_path):
     con = setup_db(tmp_path)
+    srv = PlanService(con)
     
-    p = service.create_plan(con, PlanCreate(plan_id="P1", name="Test Plan"))
+    p = srv.create_plan(PlanCreate(plan_id="P1", name="Test Plan"))
     assert p.plan_id == "P1"
     
     # Add order
-    d = service.add_plan_order(con, "P1", PlanOrderAdd(order_id="O1", driver_id="D1", vehicle_id="V1"))
+    d = srv.add_plan_order("P1", PlanOrderAdd(order_id="O1", driver_id="D1", vehicle_id="V1"))
     assert len(d.assignments) == 1
     assert d.assignments[0].order_id == "O1"
     assert d.assignments[0].stop_sequence == 1
     
     # Evaluation
-    d = service.evaluate_plan(con, "P1")
+    d = srv.evaluate_plan("P1")
     assert len(d.evaluation.stops) == 1
     assert d.evaluation.stops[0].driving_time_min == 10
     
     # Move order (add second first)
-    service.add_plan_order(con, "P1", PlanOrderAdd(order_id="O2", driver_id="D1", vehicle_id="V1"))
-    d = service.move_plan_order(con, "P1", "D1", "V1", "O1", direction=1) # O1 moves down
+    srv.add_plan_order("P1", PlanOrderAdd(order_id="O2", driver_id="D1", vehicle_id="V1"))
+    d = srv.move_plan_order("P1", "D1", "V1", "O1", direction=1) # O1 moves down
     assigned_o1 = next(a for a in d.assignments if a.order_id == "O1")
     assert assigned_o1.stop_sequence == 2
 

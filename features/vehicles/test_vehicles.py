@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 
 from core.database import init_schema
 from features.vehicles.schemas import VehicleCreate, VehicleUpdate
-from features.vehicles import service
 from features.vehicles.service import VehicleService, get_vehicle_service
 from features.vehicles.router import router
 
@@ -17,8 +16,10 @@ def test_service_crud(tmp_path):
     con = setup_db(tmp_path)
     con.execute("INSERT INTO locations (location_id, zip, city, latitude, longitude) VALUES (1, '1000', 'A', 1, 1)")
     
+    veh_service = VehicleService(con)
+    
     # Create
-    veh1 = service.create_vehicle(con, VehicleCreate(
+    veh1 = veh_service.create_vehicle(VehicleCreate(
         vehicle_id="V1",
         license_plate="AB-12",
         location_id=1,
@@ -29,15 +30,15 @@ def test_service_crud(tmp_path):
     assert veh1.spec_refrigerated is False
     
     # List
-    assert len(service.list_vehicles(con)) == 1
+    assert len(veh_service.list_vehicles()) == 1
     
     # Update
-    veh2 = service.update_vehicle(con, "V1", VehicleUpdate(spec_refrigerated=True))
+    veh2 = veh_service.update_vehicle("V1", VehicleUpdate(spec_refrigerated=True))
     assert veh2.spec_refrigerated is True
     assert veh2.spec_liftgate is True
     
     # Delete (soft)
-    veh3 = service.delete_vehicle(con, "V1")
+    veh3 = veh_service.delete_vehicle("V1")
     assert veh3.is_active is False
 
 from fastapi import FastAPI

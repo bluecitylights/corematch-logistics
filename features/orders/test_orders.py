@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 
 from core.database import init_schema
 from features.orders.schemas import OrderCreate, OrderUpdate
-from features.orders import service
 from features.orders.service import OrderService, get_order_service
 from features.orders.router import router
 
@@ -17,8 +16,10 @@ def test_service_crud(tmp_path):
     con = setup_db(tmp_path)
     con.execute("INSERT INTO locations (location_id, zip, city, latitude, longitude) VALUES (1, '1000', 'A', 1, 1)")
     
+    ord_service = OrderService(con)
+    
     # Create
-    order1 = service.create_order(con, OrderCreate(
+    order1 = ord_service.create_order(OrderCreate(
         order_id="O1",
         destination_location_id=1,
         req_driver_adr=True,
@@ -30,17 +31,17 @@ def test_service_crud(tmp_path):
     assert order1.req_driver_ehbo is False
     
     # List
-    assert len(service.list_orders(con)) == 1
+    assert len(ord_service.list_orders()) == 1
     
     # Update
-    order2 = service.update_order(con, "O1", OrderUpdate(req_driver_ehbo=True))
+    order2 = ord_service.update_order("O1", OrderUpdate(req_driver_ehbo=True))
     assert order2.req_driver_ehbo is True
     assert order2.req_driver_adr is True
     
     # Delete
-    order3 = service.delete_order(con, "O1")
+    order3 = ord_service.delete_order("O1")
     assert order3.order_id == "O1"
-    assert len(service.list_orders(con)) == 0
+    assert len(ord_service.list_orders()) == 0
 
 from fastapi import FastAPI
 app = FastAPI()

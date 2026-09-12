@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 
 from core.database import init_schema
 from features.locations.schemas import LocationCreate
-from features.locations import service
 from features.locations.service import LocationService, get_location_service
 from features.locations.router import router
 
@@ -15,20 +14,21 @@ def setup_db(tmp_path) -> duckdb.DuckDBPyConnection:
 
 def test_service_crud_and_matrix(tmp_path):
     con = setup_db(tmp_path)
+    loc_service = LocationService(con)
     
     # 1. Create initial locations
-    loc1 = service.create_location(con, LocationCreate(zip="1000", city="City A", latitude=50.8503, longitude=4.3517))
+    loc1 = loc_service.create_location(LocationCreate(zip="1000", city="City A", latitude=50.8503, longitude=4.3517))
     assert loc1.zip == "1000"
     
-    loc2 = service.create_location(con, LocationCreate(zip="2000", city="City B", latitude=51.2194, longitude=4.4025))
+    loc2 = loc_service.create_location(LocationCreate(zip="2000", city="City B", latitude=51.2194, longitude=4.4025))
     assert loc2.zip == "2000"
     
     # List
-    locations = service.list_locations(con)
+    locations = loc_service.list_locations()
     assert len(locations) == 2
     
     # Matrix verification
-    matrix = service.get_distance_matrix(con, "1000")
+    matrix = loc_service.get_distance_matrix("1000")
     assert len(matrix) == 2
     for item in matrix:
         if item.dest_zip == "1000":
@@ -39,9 +39,9 @@ def test_service_crud_and_matrix(tmp_path):
             assert item.travel_time_min > 0
 
     # Test update upsert
-    loc1_updated = service.create_location(con, LocationCreate(zip="1000", city="Updated City A", latitude=50.8503, longitude=4.3517))
+    loc1_updated = loc_service.create_location(LocationCreate(zip="1000", city="Updated City A", latitude=50.8503, longitude=4.3517))
     assert loc1_updated.city == "Updated City A"
-    matrix = service.get_distance_matrix(con, "1000")
+    matrix = loc_service.get_distance_matrix("1000")
     assert any(m.dest_zip == "2000" for m in matrix)
 
 from fastapi import FastAPI

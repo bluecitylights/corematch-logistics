@@ -1,6 +1,6 @@
 import math
 import duckdb
-from typing import Any, Generator, Sequence
+from typing import Generator, Sequence
 from core.base_service import BaseService
 from core.database import get_db, query_models, query_model_or_none
 from features.locations.schemas import Location, LocationCreate, DistanceMatrixItem
@@ -18,9 +18,8 @@ def _distance(origin: tuple[str, str, float, float], destination: tuple[str, str
 class LocationService(BaseService):
     """Domain service for managing warehouse and delivery locations."""
 
-    def rebuild_distance_matrix(self, con: duckdb.DuckDBPyConnection | None = None) -> None:
-        c = con or self.con
-        rows = c.execute(
+    def rebuild_distance_matrix(self) -> None:
+        rows = self.con.execute(
             "SELECT zip, city, latitude, longitude FROM locations ORDER BY zip"
         ).fetchall()
         matrix = [
@@ -28,8 +27,8 @@ class LocationService(BaseService):
             for origin in rows
             for destination in rows
         ]
-        c.execute("DELETE FROM distance_matrix")
-        c.executemany(
+        self.con.execute("DELETE FROM distance_matrix")
+        self.con.executemany(
             """
             INSERT INTO distance_matrix (origin_zip, dest_zip, distance_m, travel_time_min)
             VALUES (?, ?, ?, ?)
@@ -37,37 +36,24 @@ class LocationService(BaseService):
             matrix,
         )
 
-    def list_locations(self, con: duckdb.DuckDBPyConnection | None = None) -> Sequence[Location]:
-        c = con or self.con
-        return query_models(Location, c, "SELECT * FROM locations ORDER BY zip")
+    def list_locations(self) -> Sequence[Location]:
+        return query_models(Location, self.con, "SELECT * FROM locations ORDER BY zip")
 
-    def create_location(self, arg1: Any, arg2: Any = None) -> Location:
-        if isinstance(arg1, duckdb.DuckDBPyConnection):
-            c = arg1
-            payload = arg2
-        else:
-            c = self.con
-            payload = arg1
-        c.execute(
+    def create_location(self, payload: LocationCreate) -> Location:
+        self.con.execute(
             "INSERT INTO locations (zip, city, latitude, longitude) VALUES (?, ?, ?, ?) ON CONFLICT (zip) DO UPDATE SET city=EXCLUDED.city, latitude=EXCLUDED.latitude, longitude=EXCLUDED.longitude",
             [payload.zip, payload.city, payload.latitude, payload.longitude],
         )
-        self.rebuild_distance_matrix(c)
-        loc = query_model_or_none(Location, c, "SELECT * FROM locations WHERE zip = ?", [payload.zip])
+        self.rebuild_distance_matrix()
+        loc = query_model_or_none(Location, self.con, "SELECT * FROM locations WHERE zip = ?", [payload.zip])
         if loc is None:
             raise ValueError("Failed to retrieve created location")
         return loc
 
-    def get_distance_matrix(self, arg1: Any, arg2: Any = None) -> Sequence[DistanceMatrixItem]:
-        if isinstance(arg1, duckdb.DuckDBPyConnection):
-            c = arg1
-            origin_zip = arg2
-        else:
-            c = self.con
-            origin_zip = arg1
+    def get_distance_matrix(self, origin_zip: str) -> Sequence[DistanceMatrixItem]:
         return query_models(
             DistanceMatrixItem,
-            c,
+            self.con,
             "SELECT origin_zip, dest_zip, distance_m, travel_time_min FROM distance_matrix WHERE origin_zip = ?",
             [origin_zip],
         )
@@ -79,9 +65,3 @@ def get_location_service() -> Generator[LocationService, None, None]:
 
 
 location_service = LocationService()
-
-# Backward-compatibility aliases
-rebuild_distance_matrix = location_service.rebuild_distance_matrix
-list_locations = location_service.list_locations
-create_location = location_service.create_location
-get_distance_matrix = location_service.get_distance_matrix
