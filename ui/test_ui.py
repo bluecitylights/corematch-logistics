@@ -47,3 +47,11 @@ def test_ui_plans_page(tmp_path, monkeypatch):
 
     response = client.get("/plans")
     assert response.status_code == 200
+
+def test_ui_match_action(tmp_path, monkeypatch):
+    con = duckdb.connect(str(tmp_path / "ui_test.duckdb"))
+    init_schema(con)
+    monkeypatch.setattr("core.database._MASTER_CON", con)
+
+    response = client.post("/match")
+    assert response.status_code == 200

@@ -15,7 +15,7 @@ from features.orders.service import order_service
 from features.orders import schemas as order_schemas
 from features.plans.service import plan_service
 from features.plans import schemas as plan_schemas
-from features.matching import engine as matching_engine
+from features.matching.service import matching_service
 
 
 router = APIRouter(tags=["ui"])
@@ -373,7 +373,7 @@ async def add_order(
 
 @router.post("/match", response_class=HTMLResponse)
 async def run_match(request: Request):
-    results = [r.model_dump() for r in matching_engine.run_corematch_logistics(DB_PATH)]
+    results = [r.model_dump() for r in matching_service.match()]
     return _tmpl(request, "partials/match_results.html", {"results": results})
 
 

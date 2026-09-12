@@ -2,36 +2,18 @@ import duckdb
 import pandas as pd
 from pyroaring import BitMap
 from typing import Sequence
-import math
-
-from core.config import DB_PATH
 from features.matching.schemas import MatchResult
 
-def run_corematch_logistics(db_or_con: str | duckdb.DuckDBPyConnection = ":memory:") -> Sequence[MatchResult]:
-    """
-    Load drivers, vehicles, and orders from DuckDB; perform bitmap-accelerated
-    dual-resource matching; return a list of MatchResult objects.
-    """
-    if isinstance(db_or_con, duckdb.DuckDBPyConnection):
-        con = db_or_con
-        should_close = False
-    elif isinstance(db_or_con, str):
-        if db_or_con == DB_PATH:
-            from core.database import get_master_connection
-            con = get_master_connection(db_or_con).cursor()
-            should_close = True
-        else:
-            con = duckdb.connect(db_or_con)
-            should_close = True
-    else:
-        con = duckdb.connect(":memory:")
-        should_close = True
 
-    # 1. Load relational state into DataFrames
+def _execute_matching(con: duckdb.DuckDBPyConnection) -> Sequence[MatchResult]:
+    """Execute dual-resource matching against a live DuckDB connection or cursor."""
     drivers_df = con.execute("SELECT * FROM drivers").fetchdf()
     vehicles_df = con.execute("SELECT * FROM vehicles").fetchdf()
     orders_df = con.execute("SELECT * FROM orders").fetchdf()
-    
+
+    if orders_df.empty:
+        return []
+
     resource_locations_query = """
         SELECT d.driver_index, v.vehicle_index 
         FROM distance_matrix dm
@@ -39,11 +21,6 @@ def run_corematch_logistics(db_or_con: str | duckdb.DuckDBPyConnection = ":memor
         JOIN vehicles v ON dm.dest_zip = (SELECT zip FROM locations WHERE location_id = v.location_id)
         WHERE dm.travel_time_min <= 30
     """
-    
-    if orders_df.empty:
-        if should_close:
-            con.close()
-        return []
 
     try:
         if drivers_df.empty or vehicles_df.empty:
@@ -54,8 +31,8 @@ def run_corematch_logistics(db_or_con: str | duckdb.DuckDBPyConnection = ":memor
         allowed_pairs = []
 
     # Format distance allowances
-    allowed_drivers_by_vehicle = {}
-    allowed_vehicles_by_driver = {}
+    allowed_drivers_by_vehicle: dict[int, BitMap] = {}
+    allowed_vehicles_by_driver: dict[int, BitMap] = {}
     for d_idx, v_idx in allowed_pairs:
         if d_idx not in allowed_vehicles_by_driver:
             allowed_vehicles_by_driver[d_idx] = BitMap()
@@ -65,7 +42,7 @@ def run_corematch_logistics(db_or_con: str | duckdb.DuckDBPyConnection = ":memor
             allowed_drivers_by_vehicle[v_idx] = BitMap()
         allowed_drivers_by_vehicle[v_idx].add(d_idx)
 
-    # 2. Build BitMap indexes
+    # Build BitMap indexes
     active_drivers = BitMap(drivers_df.loc[drivers_df["is_active"] == True, "driver_index"].tolist()) if not drivers_df.empty else BitMap()
     active_vehicles = BitMap(vehicles_df.loc[vehicles_df["is_active"] == True, "vehicle_index"].tolist()) if not vehicles_df.empty else BitMap()
 
@@ -79,7 +56,7 @@ def run_corematch_logistics(db_or_con: str | duckdb.DuckDBPyConnection = ":memor
         "refrigerated": BitMap(vehicles_df.loc[vehicles_df["spec_refrigerated"] == True, "vehicle_index"].tolist()) if not vehicles_df.empty else BitMap(),
     }
 
-    # 3. Matching loop
+    # Matching loop
     assigned_drivers: BitMap = BitMap()
     assigned_vehicles: BitMap = BitMap()
     results: list[MatchResult] = []
@@ -133,12 +110,19 @@ def run_corematch_logistics(db_or_con: str | duckdb.DuckDBPyConnection = ":memor
                 status="Unfulfilled (Missing Driver or Vehicle)",
             ))
 
-    if should_close:
-        con.close()
     return results
+
+
+def run_corematch_logistics(db_or_con: str | duckdb.DuckDBPyConnection = ":memory:") -> Sequence[MatchResult]:
+    """
+    Run matching against a provided DuckDB connection/cursor or a database file path.
+    """
+    if isinstance(db_or_con, str):
+        with duckdb.connect(db_or_con) as con:
+            return _execute_matching(con)
+    return _execute_matching(db_or_con)
+
 
 def run_corematch_logistics_df(db_or_con: str | duckdb.DuckDBPyConnection = ":memory:") -> pd.DataFrame:
     results = run_corematch_logistics(db_or_con)
     return pd.DataFrame([r.model_dump() for r in results])
-
-
