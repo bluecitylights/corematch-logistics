@@ -7,7 +7,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DB_PATH: /app/data/corematch.duckdb
+      COREMATCH_DB_PATH: /app/data/corematch.duckdb
     volumes:
       - db_data:/app/data
     restart: on-failure

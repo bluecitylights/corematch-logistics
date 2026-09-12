@@ -7,3 +7,5 @@ __pycache__/
 # Temporary DuckDB files created during tests and demos
 _test_*.duckdb
 _demo.duckdb
+*.duckdb
+*.duckdb.wal

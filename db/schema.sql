@@ -1,9 +1,9 @@
 -- DuckDB 1.5+ requires MINVALUE <= START; use MINVALUE 0 to allow zero-based indexing.
-CREATE SEQUENCE driver_seq START 0 MINVALUE 0;
-CREATE SEQUENCE vehicle_seq START 0 MINVALUE 0;
-CREATE SEQUENCE location_seq START 0 MINVALUE 0;
+CREATE SEQUENCE IF NOT EXISTS driver_seq START 0 MINVALUE 0;
+CREATE SEQUENCE IF NOT EXISTS vehicle_seq START 0 MINVALUE 0;
+CREATE SEQUENCE IF NOT EXISTS location_seq START 0 MINVALUE 0;
 
-CREATE TABLE drivers (
+CREATE TABLE IF NOT EXISTS drivers (
     driver_index INT DEFAULT nextval('driver_seq') UNIQUE,
     driver_id VARCHAR UNIQUE,
     location_id INT,
@@ -12,7 +12,7 @@ CREATE TABLE drivers (
     skill_ehbo BOOLEAN DEFAULT false
 );
 
-CREATE TABLE vehicles (
+CREATE TABLE IF NOT EXISTS vehicles (
     vehicle_index INT DEFAULT nextval('vehicle_seq') UNIQUE,
     vehicle_id VARCHAR UNIQUE,
     license_plate VARCHAR,
@@ -22,7 +22,7 @@ CREATE TABLE vehicles (
     spec_refrigerated BOOLEAN DEFAULT false
 );
 
-CREATE TABLE orders (
+CREATE TABLE IF NOT EXISTS orders (
     order_id VARCHAR UNIQUE,
     destination_location_id INT,
     -- Driver requirements
@@ -33,13 +33,13 @@ CREATE TABLE orders (
     req_vehicle_refrigerated BOOLEAN DEFAULT false
 );
 
-CREATE TABLE index_store (
+CREATE TABLE IF NOT EXISTS index_store (
     index_type VARCHAR,
     key_name VARCHAR,
     bitmap_data BLOB
 );
 
-CREATE TABLE locations (
+CREATE TABLE IF NOT EXISTS locations (
     location_id INT DEFAULT nextval('location_seq') UNIQUE,
     zip VARCHAR PRIMARY KEY,
     city VARCHAR NOT NULL,
@@ -47,7 +47,7 @@ CREATE TABLE locations (
     longitude DOUBLE NOT NULL
 );
 
-CREATE TABLE distance_matrix (
+CREATE TABLE IF NOT EXISTS distance_matrix (
     origin_zip VARCHAR NOT NULL,
     dest_zip VARCHAR NOT NULL,
     distance_m INTEGER NOT NULL,
@@ -55,12 +55,12 @@ CREATE TABLE distance_matrix (
     PRIMARY KEY (origin_zip, dest_zip)
 );
 
-CREATE TABLE plans (
+CREATE TABLE IF NOT EXISTS plans (
     plan_id VARCHAR PRIMARY KEY,
     name VARCHAR NOT NULL
 );
 
-CREATE TABLE plan_orders (
+CREATE TABLE IF NOT EXISTS plan_orders (
     plan_id VARCHAR NOT NULL,
     order_id VARCHAR NOT NULL,
     driver_id VARCHAR,
@@ -69,7 +69,7 @@ CREATE TABLE plan_orders (
     PRIMARY KEY (plan_id, order_id)
 );
 
-CREATE TABLE plan_evaluations (
+CREATE TABLE IF NOT EXISTS plan_evaluations (
     plan_id VARCHAR NOT NULL,
     order_id VARCHAR NOT NULL,
     driver_id VARCHAR NOT NULL,
@@ -83,7 +83,7 @@ CREATE TABLE plan_evaluations (
     PRIMARY KEY (plan_id, order_id)
 );
 
-CREATE TABLE plan_route_evaluations (
+CREATE TABLE IF NOT EXISTS plan_route_evaluations (
     plan_id VARCHAR NOT NULL,
     driver_id VARCHAR NOT NULL,
     vehicle_id VARCHAR NOT NULL,

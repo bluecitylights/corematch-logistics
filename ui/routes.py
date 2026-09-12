@@ -1,4 +1,4 @@
-"""HTML and HTMX routes for the CoreMatch web interface."""
+"""HTML page routes rendering Jinja2 templates via Vertical Slice Services."""
 
 from pathlib import Path
 
@@ -6,244 +6,161 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from db import DB_PATH, get_db
-from engine import run_corematch_logistics
-from services.resources import (
-    create_driver,
-    create_order,
-    create_location,
-    create_vehicle,
-    list_orders,
-    list_locations,
-    list_plans,
-    create_plan,
-    get_plan,
-    add_plan_order,
-    generate_plan,
-    evaluate_plan,
-    validate_plan,
-    switch_plan_route,
-    move_plan_order,
-    list_resources,
-    update_driver,
-    update_vehicle,
-    update_order,
-)
+from core.database import get_db
+from core.config import DB_PATH
+from features.locations import service as location_service, schemas as location_schemas
+from features.drivers import service as driver_service, schemas as driver_schemas
+from features.vehicles import service as vehicle_service, schemas as vehicle_schemas
+from features.orders import service as order_service, schemas as order_schemas
+from features.plans import service as plan_service, schemas as plan_schemas
+from features.matching import engine as matching_engine
+
+router = APIRouter(tags=["ui"])
+
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
-router = APIRouter()
-templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-
-
-def _bool(val: str | None) -> bool:
-    return val in ("on", "true", "1", "yes")
+def _tmpl(request: Request, name: str, context: dict | None = None) -> HTMLResponse:
+    ctx = {"request": request}
+    if context:
+        ctx.update(context)
+    return templates.TemplateResponse(request=request, name=name, context=ctx)
 
 
 def _is_htmx(request: Request) -> bool:
-    return request.headers.get("HX-Request") == "true"
+    return "hx-request" in request.headers
 
 
-def _tmpl(request: Request, name: str, ctx: dict):
-    return templates.TemplateResponse(request, name, ctx)
-
-
-def _resource_edit_context(resource_type: str, resource_id: str) -> dict:
-    if resource_type == "driver":
-        resource = next(
-            (item for item in list_resources("drivers", include_inactive=True)
-             if item["driver_id"] == resource_id),
-            None,
-        )
-    elif resource_type == "vehicle":
-        resource = next(
-            (item for item in list_resources("vehicles", include_inactive=True)
-             if item["vehicle_id"] == resource_id),
-            None,
-        )
-    else:
-        resource = next(
-            (item for item in list_orders() if item["order_id"] == resource_id),
-            None,
-        )
-    if resource is None:
-        from fastapi import HTTPException
-        raise HTTPException(404, f"{resource_type.title()} not found: {resource_id}")
-    locations = _locations_context()
-    return {
-        "resource_type": resource_type,
-        "resource_path": {
-            "driver": "drivers",
-            "vehicle": "vehicles",
-            "order": "orders",
-        }[resource_type],
-        "resource_id": resource_id,
-        "resource": resource,
-        "locations": locations,
-        "location_label": next(
-            (location["address"] for location in locations
-             if location["location_id"] == resource.get("location_id",
-                                                        resource.get("destination_location_id"))),
-            "Unknown",
-        ),
-    }
-
-
-@router.get("/{resource_type}/{resource_id}/edit", response_class=HTMLResponse)
-async def edit_resource_page(
-    resource_type: str, resource_id: str, request: Request
-):
-    if resource_type not in {"drivers", "vehicles", "orders"}:
-        from fastapi import HTTPException
-        raise HTTPException(404, "Unknown resource type")
-    singular = resource_type[:-1]
-    context = _resource_edit_context(singular, resource_id)
-    return _tmpl(
-        request,
-        "partials/resource_edit_panel.html" if _is_htmx(request) else "resource_edit.html",
-        context,
-    )
-
-
-@router.post("/{resource_type}/{resource_id}/edit", response_class=HTMLResponse)
-async def update_resource_page(
-    resource_type: str, resource_id: str, request: Request
-):
-    form = await request.form()
-    if resource_type == "drivers":
-        update_driver(
-            resource_id,
-            {
-                "location_id": int(form["location_id"]),
-                "skill_adr": _bool(form.get("skill_adr")),
-                "skill_ehbo": _bool(form.get("skill_ehbo")),
-                "is_active": _bool(form.get("is_active")),
-            },
-        )
-    elif resource_type == "vehicles":
-        update_vehicle(
-            resource_id,
-            {
-                "license_plate": form["license_plate"],
-                "location_id": int(form["location_id"]),
-                "spec_liftgate": _bool(form.get("spec_liftgate")),
-                "spec_refrigerated": _bool(form.get("spec_refrigerated")),
-                "is_active": _bool(form.get("is_active")),
-            },
-        )
-    elif resource_type == "orders":
-        update_order(
-            resource_id,
-            {
-                "destination_location_id": int(form["destination_location_id"]),
-                "req_driver_adr": _bool(form.get("req_driver_adr")),
-                "req_driver_ehbo": _bool(form.get("req_driver_ehbo")),
-                "req_vehicle_liftgate": _bool(form.get("req_vehicle_liftgate")),
-                "req_vehicle_refrigerated": _bool(form.get("req_vehicle_refrigerated")),
-            },
-        )
-    else:
-        from fastapi import HTTPException
-        raise HTTPException(404, "Unknown resource type")
-    context = _resource_edit_context(resource_type[:-1], resource_id)
-    return _tmpl(
-        request,
-        "partials/resource_edit_panel.html" if _is_htmx(request) else "resource_edit.html",
-        context,
-    )
-
-
-def _location_label(location: dict) -> str:
-    return f"{location['zip']} {location['city']}"
+def _bool(val: str | None) -> bool:
+    return val == "on"
 
 
 def _locations_context() -> list[dict]:
-    return [
-        {**location, "address": _location_label(location)}
-        for location in list_locations()
-    ]
+    with get_db() as con:
+        return [
+            {
+                "location_id": l.location_id,
+                "zip": l.zip,
+                "city": l.city,
+                "address": f"{l.zip} {l.city}",
+            }
+            for l in location_service.list_locations(con)
+        ]
 
 
 @router.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+async def home_page(request: Request):
     with get_db() as con:
         driver_count = con.execute("SELECT COUNT(*) FROM drivers WHERE is_active").fetchone()[0]
         vehicle_count = con.execute("SELECT COUNT(*) FROM vehicles WHERE is_active").fetchone()[0]
         order_count = con.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
-    return _tmpl(request, "index.html", {
-        "driver_count": driver_count,
-        "vehicle_count": vehicle_count,
-        "order_count": order_count,
-    })
+    return _tmpl(
+        request,
+        "index.html",
+        {
+            "driver_count": driver_count,
+            "vehicle_count": vehicle_count,
+            "order_count": order_count,
+        },
+    )
+
+
+@router.get("/locations", response_class=HTMLResponse)
+async def locations_page(request: Request):
+    with get_db() as con:
+        locations = location_service.list_locations(con)
+    rows = [
+        {
+            "address": f"{location.zip} {location.city}",
+            "latitude": location.latitude,
+            "longitude": location.longitude
+        }
+        for location in locations
+    ]
+    template = "partials/locations.html" if _is_htmx(request) else "locations.html"
+    return _tmpl(request, template, {"locations": rows})
 
 
 @router.get("/drivers", response_class=HTMLResponse)
 async def drivers_page(request: Request):
-    drivers = list_resources("drivers", include_inactive=True)
+    with get_db() as con:
+        drivers = driver_service.list_drivers(con, include_inactive=True)
     locations = {location["location_id"]: location["address"] for location in _locations_context()}
     rows = [
-        (driver["driver_id"], driver["location_id"], driver["is_active"],
-        driver["skill_adr"], driver["skill_ehbo"], locations.get(driver["location_id"], "Unknown"))
+        (
+            driver.driver_id,
+            driver.location_id,
+            driver.is_active,
+            driver.skill_adr,
+            driver.skill_ehbo,
+            locations.get(driver.location_id, "Unknown"),
+            getattr(driver, "driver_index", 0)
+        )
         for driver in drivers
     ]
     template = "partials/drivers.html" if _is_htmx(request) else "drivers.html"
     return _tmpl(request, template, {"drivers": rows, "locations": _locations_context()})
 
 
-@router.get("/locations", response_class=HTMLResponse)
-async def locations_page(request: Request):
-    locations = _locations_context()
-    return _tmpl(request, "locations.html", {"locations": locations})
-
-
 @router.get("/plans", response_class=HTMLResponse)
-async def plans_page(request: Request, validation: dict | None = None):
-    plans = [get_plan(plan["plan_id"]) for plan in list_plans()]
-    locations = {
-        location["location_id"]: location["address"]
-        for location in _locations_context()
-    }
-    drivers = [
-        {
-            **driver,
-            "location_label": locations.get(driver["location_id"], "Unknown"),
-        }
-        for driver in list_resources("drivers")
-    ]
-    vehicles = [
-        {
-            **vehicle,
-            "location_label": locations.get(vehicle["location_id"], "Unknown"),
-        }
-        for vehicle in list_resources("vehicles")
-    ]
-    orders = list_orders()
+async def plans_page(
+    request: Request,
+    validation: dict | None = None,
+):
     with get_db() as con:
-        order_locations = {
-            row["location_id"]: f'{row["zip"]} {row["city"]}'
-            for row in con.execute(
-                """
-                SELECT location_id, zip, city
-                FROM locations
-                """
-            ).fetchdf().to_dict(orient="records")
-        }
-    orders = [
-        {
-            **order,
-            "destination_label": order_locations.get(
-                order["destination_location_id"], "Unknown"
-            ),
-        }
-        for order in orders
-    ]
+        plan_models = plan_service.list_plans(con)
+        plans = []
+        for p in plan_models:
+            d = plan_service.get_plan(con, p.plan_id)
+            if d:
+                plan_dict = {
+                    "plan_id": d.plan_id,
+                    "name": d.name,
+                    "orders": [{"order_id": a.order_id, "driver_id": a.driver_id, "vehicle_id": a.vehicle_id, "stop_sequence": a.stop_sequence} for a in d.assignments],
+                }
+                groups = {}
+                for a in d.assignments:
+                    key = (a.driver_id, a.vehicle_id)
+                    if key not in groups:
+                        groups[key] = {"driver_id": a.driver_id, "vehicle_id": a.vehicle_id, "stops": []}
+                    
+                    stop_eval = next((s for s in (d.evaluation.stops if d.evaluation else []) if s.order_id == a.order_id), None)
+                    groups[key]["stops"].append({
+                        "order_id": a.order_id,
+                        "evaluation": stop_eval.model_dump() if stop_eval else None
+                    })
+                
+                route_groups = []
+                for key, group in groups.items():
+                    route_eval = next((r for r in (d.evaluation.routes if d.evaluation else []) if r.driver_id == key[0] and r.vehicle_id == key[1]), None)
+                    group["return"] = route_eval.model_dump() if route_eval else None
+                    route_groups.append(group)
+                    
+                plan_dict["route_groups"] = route_groups
+                plans.append(plan_dict)
+
+        order_locations = {l["location_id"]: l["address"] for l in _locations_context()}
+        drivers = [{"driver_id": d.driver_id, "location_label": order_locations.get(d.location_id, "Unknown")} for d in driver_service.list_drivers(con)]
+        vehicles = [{"vehicle_id": v.vehicle_id, "location_label": order_locations.get(v.location_id, "Unknown")} for v in vehicle_service.list_vehicles(con)]
+        orders_raw = order_service.list_orders(con)
+        
+        orders = []
+        for o in orders_raw:
+            o_dict = o.model_dump()
+            o_dict["destination_label"] = order_locations.get(o.destination_location_id, "Unknown")
+            orders.append(o_dict)
+
     for plan in plans:
-        assigned_order_ids = {
-            order["order_id"] for order in plan["orders"]
-        }
+        assigned_order_ids = {order["order_id"] for order in plan["orders"]}
         plan["available_orders"] = [
             order for order in orders
             if order["order_id"] not in assigned_order_ids
         ]
+        
+        if validation:
+            plan["validation"] = validation
+            
     return _tmpl(
         request,
         "plans.html",
@@ -263,25 +180,30 @@ async def add_plan(
     plan_id: str = Form(...),
     name: str = Form(...),
 ):
-    create_plan({"plan_id": plan_id, "name": name})
+    with get_db() as con:
+        plan_service.create_plan(con, plan_schemas.PlanCreate(plan_id=plan_id, name=name))
     return await plans_page(request)
 
 
 @router.post("/plans/{plan_id}/match", response_class=HTMLResponse)
 async def run_plan_match(plan_id: str, request: Request):
-    generate_plan(plan_id)
+    with get_db() as con:
+        plan_service.generate_plan(con, plan_id)
     return await plans_page(request)
 
 
 @router.post("/plans/{plan_id}/evaluate", response_class=HTMLResponse)
 async def evaluate_plan_page(plan_id: str, request: Request):
-    evaluate_plan(plan_id)
+    with get_db() as con:
+        plan_service.evaluate_plan(con, plan_id)
     return await plans_page(request)
 
 
 @router.post("/plans/{plan_id}/validate", response_class=HTMLResponse)
 async def validate_plan_page(plan_id: str, request: Request):
-    return await plans_page(request, validate_plan(plan_id))
+    with get_db() as con:
+        res = plan_service.validate_plan(con, plan_id)
+    return await plans_page(request, validation={"errors": res.errors} if res else None)
 
 
 @router.post("/plans/{plan_id}/routes", response_class=HTMLResponse)
@@ -293,9 +215,14 @@ async def switch_plan_route_page(
     driver_id: str = Form(...),
     vehicle_id: str = Form(...),
 ):
-    switch_plan_route(
-        plan_id, current_driver_id, current_vehicle_id, driver_id, vehicle_id
-    )
+    with get_db() as con:
+        plan_service.switch_plan_route(
+            con,
+            plan_id,
+            current_driver_id,
+            current_vehicle_id,
+            plan_schemas.PlanRouteSwitch(driver_id=driver_id, vehicle_id=vehicle_id)
+        )
     return await plans_page(request)
 
 
@@ -308,7 +235,12 @@ async def move_plan_order_page(
     vehicle_id: str = Form(...),
     direction: int = Form(...),
 ):
-    move_plan_order(plan_id, driver_id, vehicle_id, order_id, direction)
+    with get_db() as con:
+        try:
+            plan_service.move_plan_order(con, plan_id, driver_id, vehicle_id, order_id, direction)
+        except ValueError as e:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail=str(e))
     return await plans_page(request)
 
 
@@ -320,14 +252,16 @@ async def add_plan_order_page(
     vehicle_id: str = Form(...),
     order_id: str = Form(...),
 ):
-    add_plan_order(
-        plan_id,
-        {
-            "driver_id": driver_id,
-            "vehicle_id": vehicle_id,
-            "order_id": order_id,
-        },
-    )
+    with get_db() as con:
+        try:
+            plan_service.add_plan_order(
+                con,
+                plan_id,
+                plan_schemas.PlanOrderAdd(driver_id=driver_id, vehicle_id=vehicle_id, order_id=order_id)
+            )
+        except ValueError as e:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail=str(e))
     return await plans_page(request)
 
 
@@ -339,12 +273,13 @@ async def add_location(
     latitude: float = Form(...),
     longitude: float = Form(...),
 ):
-    create_location({
-        "zip": zip,
-        "city": city,
-        "latitude": latitude,
-        "longitude": longitude,
-    })
+    with get_db() as con:
+        location_service.create_location(
+            con,
+            location_schemas.LocationCreate(
+                zip=zip, city=city, latitude=latitude, longitude=longitude
+            )
+        )
     return await locations_page(request)
 
 
@@ -356,29 +291,32 @@ async def add_driver(
     skill_adr: str | None = Form(None),
     skill_ehbo: str | None = Form(None),
 ):
-    create_driver({
-        "driver_id": driver_id,
-        "location_id": location_id,
-        "skill_adr": _bool(skill_adr),
-        "skill_ehbo": _bool(skill_ehbo),
-    })
+    with get_db() as con:
+        driver_service.create_driver(
+            con,
+            driver_schemas.DriverCreate(
+                driver_id=driver_id, location_id=location_id, skill_adr=_bool(skill_adr), skill_ehbo=_bool(skill_ehbo)
+            )
+        )
     return await drivers_page(request)
 
 
 @router.delete("/drivers/{driver_id}", response_class=HTMLResponse)
 async def deactivate_driver(driver_id: str, request: Request):
-    update_driver(driver_id, {"is_active": False})
+    with get_db() as con:
+        driver_service.delete_driver(con, driver_id)
     return await drivers_page(request)
 
 
 @router.get("/vehicles", response_class=HTMLResponse)
 async def vehicles_page(request: Request):
-    vehicles = list_resources("vehicles", include_inactive=True)
+    with get_db() as con:
+        vehicles = vehicle_service.list_vehicles(con, include_inactive=True)
     locations = {location["location_id"]: location["address"] for location in _locations_context()}
     rows = [
-        (vehicle["vehicle_id"], vehicle["license_plate"], vehicle["location_id"],
-         vehicle["is_active"], vehicle["spec_liftgate"], vehicle["spec_refrigerated"],
-         locations.get(vehicle["location_id"], "Unknown"))
+        (vehicle.vehicle_id, vehicle.license_plate, vehicle.location_id,
+         vehicle.is_active, vehicle.spec_liftgate, vehicle.spec_refrigerated,
+         locations.get(vehicle.location_id, "Unknown"), getattr(vehicle, "vehicle_index", 0))
         for vehicle in vehicles
     ]
     template = "partials/vehicles.html" if _is_htmx(request) else "vehicles.html"
@@ -394,31 +332,34 @@ async def add_vehicle(
     spec_liftgate: str | None = Form(None),
     spec_refrigerated: str | None = Form(None),
 ):
-    create_vehicle({
-        "vehicle_id": vehicle_id,
-        "license_plate": license_plate,
-        "location_id": location_id,
-        "spec_liftgate": _bool(spec_liftgate),
-        "spec_refrigerated": _bool(spec_refrigerated),
-    })
+    with get_db() as con:
+        vehicle_service.create_vehicle(
+            con,
+            vehicle_schemas.VehicleCreate(
+                vehicle_id=vehicle_id, license_plate=license_plate, location_id=location_id,
+                spec_liftgate=_bool(spec_liftgate), spec_refrigerated=_bool(spec_refrigerated)
+            )
+        )
     return await vehicles_page(request)
 
 
 @router.delete("/vehicles/{vehicle_id}", response_class=HTMLResponse)
 async def deactivate_vehicle(vehicle_id: str, request: Request):
-    update_vehicle(vehicle_id, {"is_active": False})
+    with get_db() as con:
+        vehicle_service.delete_vehicle(con, vehicle_id)
     return await vehicles_page(request)
 
 
 @router.get("/orders", response_class=HTMLResponse)
 async def orders_page(request: Request):
-    orders = list_orders()
+    with get_db() as con:
+        orders = order_service.list_orders(con)
     locations = {location["location_id"]: location["address"] for location in _locations_context()}
     rows = [
-        (order["order_id"], order["destination_location_id"], order["req_driver_adr"],
-         order["req_driver_ehbo"], order["req_vehicle_liftgate"],
-         order["req_vehicle_refrigerated"],
-         locations.get(order["destination_location_id"], "Unknown"))
+        (order.order_id, order.destination_location_id, order.req_driver_adr,
+         order.req_driver_ehbo, order.req_vehicle_liftgate,
+         order.req_vehicle_refrigerated,
+         locations.get(order.destination_location_id, "Unknown"), getattr(order, "order_index", 0))
         for order in orders
     ]
     template = "partials/orders.html" if _is_htmx(request) else "orders.html"
@@ -435,28 +376,29 @@ async def add_order(
     req_vehicle_liftgate: str | None = Form(None),
     req_vehicle_refrigerated: str | None = Form(None),
 ):
-    create_order({
-        "order_id": order_id,
-        "destination_location_id": destination_location_id,
-        "req_driver_adr": _bool(req_driver_adr),
-        "req_driver_ehbo": _bool(req_driver_ehbo),
-        "req_vehicle_liftgate": _bool(req_vehicle_liftgate),
-        "req_vehicle_refrigerated": _bool(req_vehicle_refrigerated),
-    })
+    with get_db() as con:
+        order_service.create_order(
+            con,
+            order_schemas.OrderCreate(
+                order_id=order_id, destination_location_id=destination_location_id,
+                req_driver_adr=_bool(req_driver_adr), req_driver_ehbo=_bool(req_driver_ehbo),
+                req_vehicle_liftgate=_bool(req_vehicle_liftgate), req_vehicle_refrigerated=_bool(req_vehicle_refrigerated)
+            )
+        )
     return await orders_page(request)
 
 
 @router.post("/match", response_class=HTMLResponse)
 async def run_match(request: Request):
-    results = run_corematch_logistics(DB_PATH).to_dict(orient="records")
+    results = [r.model_dump() for r in matching_engine.run_corematch_logistics(DB_PATH)]
     return _tmpl(request, "partials/match_results.html", {"results": results})
 
 
 @router.post("/seed", response_class=HTMLResponse)
 async def seed_demo(request: Request):
-    from engine import _seed_demo
-
+    from core.database import seed_demo
     with get_db() as con:
         if con.execute("SELECT COUNT(*) FROM drivers").fetchone()[0] == 0:
-            _seed_demo(con)
-    return HTMLResponse('<p class="text-green-600 font-semibold">Demo data seeded ✓</p>')
+            seed_demo(con)
+    return HTMLResponse("<p class=\"text-green-600 font-semibold\">Demo data seeded ✓</p>")
+
